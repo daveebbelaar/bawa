@@ -1,0 +1,3 @@
+interface:
+  display_name: "Windows Integrations"
+  short_description: "Hotkeys, tray icon, windows, capture"

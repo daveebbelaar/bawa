@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The agent CLI: __CLI_NAME__.exe, a console app that sends commands to the running __APP_NAME__
+       over a named pipe. A separate exe because a WinUI app has no dependable stdout or exit code.
+       build.ps1 publishes it as one file to %USERPROFILE%\.local\bin\__CLI_NAME__.exe. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>__CLI_NAME__</AssemblyName>
+    <RootNamespace>__APP_NAME__.Agent</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- One list of commands for the app and the CLI: these files live in the app project. -->
+  <ItemGroup>
+    <Compile Include="..\__APP_NAME__\Agent\AgentCore.cs" Link="Shared\AgentCore.cs" />
+    <Compile Include="..\__APP_NAME__\Agent\AgentCommands.cs" Link="Shared\AgentCommands.cs" />
+    <Compile Include="..\__APP_NAME__\Agent\AgentPipe.cs" Link="Shared\AgentPipe.cs" />
+  </ItemGroup>
+</Project>
