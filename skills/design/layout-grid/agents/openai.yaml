@@ -1,0 +1,3 @@
+interface:
+  display_name: "Layout Grid"
+  short_description: "A 4 epx grid with checks that fail on misalignment"

@@ -1,0 +1,3 @@
+interface:
+  display_name: "App Icon"
+  short_description: "Windows icon from an SVG, rendered to a multi-size .ico"

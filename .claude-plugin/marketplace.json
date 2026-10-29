@@ -1,0 +1,28 @@
+{
+  "name": "bawa",
+  "owner": {
+    "name": "Dave Ebbelaar",
+    "url": "https://github.com/daveebbelaar"
+  },
+  "description": "Build any Windows app. Agent skills for native Windows apps with C# and WinUI 3.",
+  "plugins": [
+    {
+      "name": "bawa",
+      "source": "./",
+      "description": "Build any Windows app: skills to research, clone, plan, scaffold, design, integrate, optimize, test, and ship native Windows apps with C#, WinUI 3, and the Windows App SDK.",
+      "category": "development",
+      "keywords": [
+        "windows",
+        "winui",
+        "csharp",
+        "dotnet",
+        "fluent",
+        "mica",
+        "computer-use",
+        "clone",
+        "performance",
+        "skills"
+      ]
+    }
+  ]
+}

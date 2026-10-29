@@ -1,0 +1,6 @@
+﻿# Runs the in-app self-test against a fresh seeded store in %TEMP%. Exit code 0 when every check passed.
+. "$PSScriptRoot\common.ps1"
+$store = Join-Path $env:TEMP "$AppName-self.db"
+Remove-Store $store
+$code = Invoke-App -Environment @{ APP_STORE = $store } -Arguments '--selftest'
+exit $code

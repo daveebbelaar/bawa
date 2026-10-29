@@ -1,0 +1,3 @@
+interface:
+  display_name: "Design Kit"
+  short_description: "Custom WinUI parts, tokens, icons, title bar, and a gallery"

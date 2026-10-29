@@ -1,0 +1,3 @@
+interface:
+  display_name: "C# and WinUI"
+  short_description: "C# 14 and WinUI 3 rules, interop, and error fixes"

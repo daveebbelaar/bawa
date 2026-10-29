@@ -1,0 +1,3 @@
+interface:
+  display_name: "User Stories"
+  short_description: "Turn a brief into a backlog with checkable criteria"

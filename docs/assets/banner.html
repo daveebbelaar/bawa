@@ -1,0 +1,123 @@
+<!doctype html>
+<!-- Source of banner-light.png and banner-dark.png. Render with scripts/render-banner.ps1. -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>BAWA banner</title>
+<style>
+  :root {
+    --bg1: #dfe9fb; --bg2: #b8cdf6; --bloom1: #5f8ff5; --bloom2: #8fb3ff;
+    --win: rgba(255,255,255,0.72); --win-edge: rgba(255,255,255,0.9); --win-shadow: rgba(40,70,140,0.22);
+    --title: #1b1b1f; --sub: #1a1a1a; --caption: #2b2b30;
+    --chip: rgba(255,255,255,0.78); --chip-edge: rgba(0,0,0,0.06); --chip-text: #1f2430;
+    --bar: rgba(243,246,252,0.82); --bar-edge: rgba(255,255,255,0.9); --dot: #6b7280; --active: #0067c0;
+    --grad: linear-gradient(90deg, #0a74e8 0%, #4c63e6 45%, #9b55ea 100%);
+  }
+  body.dark {
+    --bg1: #07112b; --bg2: #0c2a6b; --bloom1: #1d5fe0; --bloom2: #0e8bd6;
+    --win: rgba(32,38,58,0.74); --win-edge: rgba(255,255,255,0.12); --win-shadow: rgba(0,0,0,0.45);
+    --title: #e9ecf3; --sub: #ffffff; --caption: #e6e8ee;
+    --chip: rgba(255,255,255,0.08); --chip-edge: rgba(255,255,255,0.14); --chip-text: #eef1f7;
+    --bar: rgba(30,34,48,0.82); --bar-edge: rgba(255,255,255,0.1); --dot: #9aa3b5; --active: #4cc2ff;
+    --grad: linear-gradient(90deg, #4aa3ff 0%, #8a8cf6 50%, #c78af2 100%);
+  }
+  html, body { margin: 0; width: 1280px; height: 560px; overflow: hidden; }
+  body {
+    font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+    background: radial-gradient(1100px 520px at 88% 30%, var(--bloom2) 0%, transparent 60%),
+                radial-gradient(900px 600px at 12% 110%, var(--bloom1) 0%, transparent 62%),
+                linear-gradient(160deg, var(--bg1) 0%, var(--bg2) 100%);
+    position: relative;
+  }
+  /* The Windows 11 bloom: soft folded petals behind the window. */
+  .petal { position: absolute; border-radius: 50%; filter: blur(2px); opacity: .55; }
+  .p1 { width: 900px; height: 900px; left: 640px; top: -420px; background: radial-gradient(circle at 30% 70%, rgba(255,255,255,.35), transparent 60%); transform: rotate(25deg); }
+  .p2 { width: 760px; height: 760px; left: -260px; top: 180px; background: radial-gradient(circle at 70% 30%, rgba(255,255,255,.25), transparent 62%); }
+
+  .window {
+    position: absolute; left: 150px; top: 44px; width: 980px; height: 372px;
+    background: var(--win); border: 1px solid var(--win-edge); border-radius: 16px;
+    box-shadow: 0 30px 70px var(--win-shadow), 0 2px 6px var(--win-shadow);
+    backdrop-filter: blur(30px);
+  }
+  .titlebar { height: 48px; display: flex; align-items: center; padding-left: 18px; }
+  .appicon { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg, #2f8cff, #a855f7); margin-right: 12px; position: relative; }
+  .appicon::after { content: ""; position: absolute; left: 4px; top: 5px; width: 10px; height: 8px; background: #fff; border-radius: 2px; }
+  .apptitle { font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif; font-size: 13px; color: var(--title); }
+  .captions { margin-left: auto; display: flex; height: 48px; }
+  .captions span { width: 56px; display: flex; align-items: center; justify-content: center; color: var(--caption); }
+  .captions svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.1; fill: none; }
+
+  .hero { text-align: center; margin-top: 18px; }
+  .word {
+    font-size: 132px; font-weight: 800; letter-spacing: 6px; line-height: 1;
+    background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { font-size: 34px; font-weight: 700; color: var(--sub); margin-top: 14px; letter-spacing: -0.3px; }
+  .chips { display: flex; gap: 10px; justify-content: center; margin-top: 30px; }
+  .chip {
+    font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif; font-size: 15px; font-weight: 600; color: var(--chip-text);
+    padding: 8px 22px; border-radius: 8px; background: var(--chip); border: 1px solid var(--chip-edge);
+  }
+
+  .taskbar {
+    position: absolute; left: 50%; transform: translateX(-50%); top: 454px; height: 64px; padding: 0 14px;
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bar); border: 1px solid var(--bar-edge); border-radius: 12px; backdrop-filter: blur(30px);
+    box-shadow: 0 12px 30px var(--win-shadow);
+  }
+  .slot { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; position: relative; border-radius: 6px; }
+  .slot.hot { background: rgba(255,255,255,.35); }
+  body.dark .slot.hot { background: rgba(255,255,255,.08); }
+  .slot .run { position: absolute; bottom: 2px; width: 6px; height: 3px; border-radius: 2px; background: var(--dot); }
+  .slot.hot .run { width: 16px; background: var(--active); }
+  .slot svg { width: 36px; height: 36px; }
+  .slot.big svg { width: 40px; height: 40px; }
+</style>
+</head>
+<body>
+  <div class="petal p1"></div><div class="petal p2"></div>
+
+  <div class="window">
+    <div class="titlebar">
+      <div class="appicon"></div><div class="apptitle">Your App</div>
+      <div class="captions">
+        <span><svg viewBox="0 0 12 12"><path d="M1 6.5h10"/></svg></span>
+        <span><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" rx="1.5"/></svg></span>
+        <span><svg viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></svg></span>
+      </div>
+    </div>
+    <div class="hero">
+      <div class="word">BAWA</div>
+      <div class="sub">Build Any Windows App</div>
+      <div class="chips">
+        <div class="chip">C# 14</div><div class="chip">WinUI 3</div><div class="chip">SQLite</div><div class="chip">Mica</div><div class="chip">Local data</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="taskbar">
+    <!-- Start -->
+    <div class="slot"><svg viewBox="0 0 36 36"><defs><linearGradient id="st" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#36b7ff"/><stop offset="1" stop-color="#0a64d6"/></linearGradient></defs>
+      <rect x="5" y="5" width="12.5" height="12.5" rx="1.5" fill="url(#st)"/><rect x="18.5" y="5" width="12.5" height="12.5" rx="1.5" fill="url(#st)"/>
+      <rect x="5" y="18.5" width="12.5" height="12.5" rx="1.5" fill="url(#st)"/><rect x="18.5" y="18.5" width="12.5" height="12.5" rx="1.5" fill="url(#st)"/></svg></div>
+    <!-- Search -->
+    <div class="slot"><svg viewBox="0 0 36 36"><circle cx="16" cy="16" r="7.5" fill="none" stroke="var(--dot)" stroke-width="2.4"/><path d="M21.5 21.5l6 6" stroke="var(--dot)" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+    <!-- Notes -->
+    <div class="slot"><svg viewBox="0 0 36 36"><rect x="5" y="4" width="26" height="28" rx="5" fill="#fff"/><path d="M5 9a5 5 0 015-5h16a5 5 0 015 5v3H5z" fill="#ffcc00"/><path d="M10 18h16M10 22.5h16M10 27h10" stroke="#b8bcc6" stroke-width="1.6" stroke-linecap="round"/></svg><span class="run"></span></div>
+    <!-- Calendar -->
+    <div class="slot"><svg viewBox="0 0 36 36"><rect x="4" y="5" width="28" height="27" rx="5" fill="#fff"/><path d="M4 10a5 5 0 015-5h18a5 5 0 015 5v3H4z" fill="#0f6cbd"/><text x="18" y="28" text-anchor="middle" font-family="Segoe UI" font-weight="600" font-size="12" fill="#1f2430">24</text></svg></div>
+    <!-- Chart -->
+    <div class="slot"><svg viewBox="0 0 36 36"><defs><linearGradient id="ch" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3ccf6a"/><stop offset="1" stop-color="#139a43"/></linearGradient></defs><rect x="4" y="4" width="28" height="28" rx="7" fill="url(#ch)"/><rect x="10" y="20" width="4" height="7" rx="1.5" fill="#fff"/><rect x="16" y="15" width="4" height="12" rx="1.5" fill="#fff"/><rect x="22" y="10" width="4" height="17" rx="1.5" fill="#fff"/></svg></div>
+    <!-- Your app, active -->
+    <div class="slot hot big"><svg viewBox="0 0 36 36"><defs><linearGradient id="me" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2f8cff"/><stop offset="1" stop-color="#7c5cf5"/></linearGradient></defs><rect x="3" y="3" width="30" height="30" rx="7.5" fill="url(#me)"/><circle cx="11" cy="12" r="2.2" fill="#fff"/><circle cx="11" cy="18" r="2.2" fill="#fff"/><circle cx="11" cy="24" r="2.2" fill="none" stroke="#fff" stroke-width="1.4"/><path d="M16 12h11M16 18h9M16 24h11" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg><span class="run"></span></div>
+    <!-- Snap layouts -->
+    <div class="slot"><svg viewBox="0 0 36 36"><defs><linearGradient id="la" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9b6bff"/><stop offset="1" stop-color="#6b3fe0"/></linearGradient></defs><rect x="4" y="4" width="28" height="28" rx="7" fill="url(#la)"/><rect x="9" y="10" width="8" height="16" rx="2" fill="#fff"/><rect x="19" y="10" width="8" height="7" rx="2" fill="#fff" opacity=".85"/><rect x="19" y="19" width="8" height="7" rx="2" fill="#fff" opacity=".85"/></svg><span class="run"></span></div>
+    <!-- Timer -->
+    <div class="slot"><svg viewBox="0 0 36 36"><defs><linearGradient id="ti" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffa53d"/><stop offset="1" stop-color="#f26b0f"/></linearGradient></defs><rect x="4" y="4" width="28" height="28" rx="7" fill="url(#ti)"/><circle cx="18" cy="19.5" r="8" fill="none" stroke="#fff" stroke-width="2.4"/><path d="M18 15.5v4.5l3 2" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M15 8.5h6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg></div>
+    <!-- Capture -->
+    <div class="slot"><svg viewBox="0 0 36 36"><rect x="4" y="4" width="28" height="28" rx="7" fill="#5b6270"/><path d="M10 14v-3a1 1 0 011-1h3M22 10h3a1 1 0 011 1v3M26 22v3a1 1 0 01-1 1h-3M14 26h-3a1 1 0 01-1-1v-3" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"/><circle cx="18" cy="18" r="2.6" fill="#fff"/></svg></div>
+  </div>
+  <script>if (location.hash === "#dark") document.body.classList.add("dark");</script>
+</body>
+</html>

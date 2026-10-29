@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- Source of .claude-plugin/icon.png. Render with scripts/render-banner.ps1. -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>BAWA icon</title>
+<style>
+  html, body { margin: 0; width: 512px; height: 512px; background: transparent; overflow: hidden; }
+  .tile {
+    position: absolute; left: 50px; top: 50px; width: 412px; height: 412px; border-radius: 88px;
+    background: linear-gradient(135deg, #2f8cff 0%, #4f74f2 45%, #a855f7 100%);
+    box-shadow: 0 10px 28px rgba(60, 60, 140, .28);
+  }
+  .tile::before { content: ""; position: absolute; inset: 0 0 50% 0; border-radius: 88px 88px 0 0;
+    background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0)); }
+  .win { position: absolute; left: 116px; top: 141px; width: 280px; height: 230px; border-radius: 22px; background: #fff;
+    box-shadow: 0 8px 20px rgba(40, 30, 120, .28); overflow: hidden; }
+  .bar { height: 46px; background: #eef0fb; display: flex; justify-content: flex-end; align-items: center; padding-right: 10px; gap: 4px; }
+  .bar svg { width: 34px; height: 22px; }
+  .line { position: absolute; left: 30px; height: 17px; border-radius: 9px; }
+</style>
+</head>
+<body>
+  <div class="tile"></div>
+  <div class="win">
+    <div class="bar">
+      <svg viewBox="0 0 34 22"><path d="M11 11h12" stroke="#6b6f86" stroke-width="2.6" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 34 22"><rect x="11" y="5" width="12" height="12" rx="2.5" fill="none" stroke="#6b6f86" stroke-width="2.6"/></svg>
+      <svg viewBox="0 0 34 22"><path d="M12 6l10 10M22 6L12 16" stroke="#6b6f86" stroke-width="2.6" stroke-linecap="round"/></svg>
+    </div>
+    <div class="line" style="top: 80px; width: 110px; background: #c9cef2"></div>
+    <div class="line" style="top: 116px; width: 190px; background: #dfe2f7"></div>
+    <div class="line" style="top: 152px; width: 160px; background: #dfe2f7"></div>
+    <div class="line" style="top: 188px; width: 100px; background: #dfe2f7"></div>
+  </div>
+</body>
+</html>

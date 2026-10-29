@@ -1,0 +1,3 @@
+interface:
+  display_name: "Windows Design"
+  short_description: "Make a WinUI app look and feel native to Windows 11"
