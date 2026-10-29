@@ -1,4 +1,4 @@
-# Performance recipes
+﻿# Performance recipes
 
 Each recipe names the symptom, the cause, and the fix. The code compiled
 in a template app; the watchdog, the frame probe, and the startup numbers
@@ -256,27 +256,17 @@ rest. Without the CLI, log a line from the first `FrameProbe` in
 On the template app this measured about 1,000 ms per launch (including
 the CLI's 300 ms check for a running copy).
 
-**ReadyToRun** precompiles the app's own IL so less JIT runs at launch.
-The .NET framework itself is already precompiled, so the win is the
-app's code only. It needs `dotnet publish`, which in this template leaves
-out the app's `.pri` and `.xbf` files. Try it like this, and adopt it only
-for a measured gain:
+**NativeAOT** compiles the whole app to native code: no JIT at launch.
+`tools/publish.ps1 -Aot` makes it and runs the self-test on it.
+Measured on the template (cold start to the main window, 3 runs each):
+about 420 ms self-contained JIT, 170 ms NativeAOT. ReadyToRun only
+precompiles the app's own code and gained about 10% (1,025 ms to 915 ms
+to first CLI answer), so skip it. NativeAOT needs the MSVC linker and
+source-generated JSON; the `distribute` skill has both.
 
-```powershell
-dotnet publish src\MyApp\MyApp.csproj -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true -o $env:TEMP\MyApp-r2r
-$bin = "$env:LOCALAPPDATA\Dev\MyApp\artifacts\bin\MyApp\release_win-x64"
-Get-ChildItem $bin -Recurse -Include *.pri, *.xbf | ForEach-Object {
-    $to = Join-Path "$env:TEMP\MyApp-r2r" $_.FullName.Substring($bin.Length)
-    New-Item -ItemType Directory -Force (Split-Path $to) | Out-Null
-    Copy-Item $_.FullName $to
-}
-$env:APP_EXE = "$env:TEMP\MyApp-r2r\MyApp.exe"    # the agent CLI starts this copy
-```
-
-Measured on the template: about 1,025 ms without, 915 ms with, warm,
-over 4 runs each. If you adopt it, `build.ps1` must publish and copy the
-`.pri` and `.xbf` files every time, and the self-test must run on the
-published folder.
+Publish an unpackaged WinUI app with `-p:EnableMsixTooling=true`, or the
+publish folder lacks the app's `.pri` (with the compiled XAML) and the
+app dies in `InitializeComponent`. `tools/publish.ps1` sets it.
 
 **Other startup costs to check first:**
 

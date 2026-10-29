@@ -1,7 +1,8 @@
-# Shared by the tools: where the installed app lives, and a way to run it that never hangs.
+﻿# Shared by the tools: where the installed app lives, and a way to run it that never hangs.
 # Dot-source it: . "$PSScriptRoot\common.ps1"
 $AppName = '__APP_NAME__'
-$AppExe = Join-Path $env:LOCALAPPDATA "Programs\$AppName\$AppName.exe"
+# APP_EXE runs another build: a publish folder, or a worktree's Debug build.
+$AppExe = if ($env:APP_EXE) { $env:APP_EXE } else { Join-Path $env:LOCALAPPDATA "Programs\$AppName\$AppName.exe" }
 
 # Runs the installed app with extra environment variables, prints its output, and returns its exit code.
 # The app writes its output to the file in APP_LOG (AgentLog.cs): a WinUI app has no dependable stdout.

@@ -1,4 +1,4 @@
----
+﻿---
 name: os-integrations
 description: Deep Windows integrations for a native app, such as global hotkeys, tray icons, floating panels, moving other apps' windows, screen capture, clipboard, toasts, URL protocols, launch at login, single instance, a CLI, and the elevation limits each one hits. Use when an app must reach outside its own window or control other apps.
 ---
@@ -19,7 +19,7 @@ Code for every row marked "recipe" is in [recipes.md](recipes.md).
 | List other apps' windows | `EnumWindows`, skipping cloaked ones (`DWMWA_CLOAKED`) | None |
 | Tray icon (the menu bar extra) | `Shell_NotifyIcon` on a hidden window (recipe) | None. New icons start in the overflow |
 | Live status in the taskbar (a timer, a sync) | Tray icon tooltip, or `ITaskbarList3` progress on the taskbar button | None |
-| Desktop widgets (Widgets board) | Widget providers need package identity (MSIX). Not available unpackaged | Skip in a BAWA app |
+| Desktop widgets (Widgets board), share targets, Explorer context menus, startup tasks, Windows AI APIs | Need package identity | Add a sparse package to the unpackaged app (`distribute` skill, step 5), as PowerToys does for its context menus |
 | Tray-only app, no taskbar button | Never `Activate()` the main window at launch; the tray icon shows it | None |
 | Spotlight-style panel that keeps the other app in front | Topmost borderless window with `WS_EX_NOACTIVATE`, or one that activates and hands focus back (recipe) | None |
 | Move and resize other apps' windows | `SetWindowPos`, corrected by `DWMWA_EXTENDED_FRAME_BOUNDS` (recipe) | None. Elevated windows need an elevated app |

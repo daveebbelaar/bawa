@@ -1,4 +1,4 @@
----
+﻿---
 name: performance
 description: Make a Windows app fast by measuring hangs, stutter, CPU, memory, and startup, then moving work off the UI thread and onto the GPU. Use when the app freezes or shows "Not responding", a shortcut feels slow, scrolling or dragging stutters, the fan spins, memory grows, or the user asks to optimize or profile.
 ---
@@ -83,12 +83,11 @@ reproduce -> measure (Release build) -> find the line -> fix -> measure again ->
 - Keep frames as `IDirect3DSurface` or a D3D11 texture between capture,
   processing, and encoding. Converting to a `SoftwareBitmap` and back costs
   copies through CPU memory.
-- ReadyToRun precompiles the app's own code for a faster start, but it
-  needs `dotnet publish`, and in this template publish leaves out the
-  app's `.pri` and `.xbf` files (the app then dies in
-  `InitializeComponent`). That is why `build.ps1` uses `dotnet build`.
-  Measured on the template: launch to first answer went from about
-  1.0 s to 0.9 s. Try it only with the steps in recipes.md ("Startup").
+- For start time, NativeAOT beats everything else: `tools/publish.ps1 -Aot`.
+  Measured on the template, cold start to the main window: about 420 ms
+  self-contained JIT, 170 ms NativeAOT. ReadyToRun gained only about 10%.
+  Use NativeAOT for tray utilities, launchers, and panels; the `distribute`
+  skill has the setup (the MSVC linker) and the trim-warning fixes.
 
 Done when the slow action has a measured before and after, the after meets
 the two numbers at the top, and the commit message names both.

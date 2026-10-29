@@ -1,0 +1,3 @@
+interface:
+  display_name: "Distribute"
+  short_description: "Publish, sign, package, and list a Windows app"

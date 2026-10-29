@@ -1,4 +1,5 @@
-using System.Text.Json;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace __APP_NAME__;
 
@@ -29,7 +30,8 @@ public static class AppPaths
     public static string Prefs => IsOverridden ? Store + ".settings.json" : Path.Combine(Folder, "settings.json");
 }
 
-/// Small preferences, saved as JSON. Unpackaged apps have no ApplicationData.LocalSettings.
+/// Small preferences, saved as a JSON file next to the data, so a test run keeps its own copy.
+/// (ApplicationData.GetForUnpackaged() exists since Windows App SDK 2.2, but a file is easier to test.)
 public sealed class Prefs
 {
     public string Theme { get; set; } = "system";
@@ -41,13 +43,20 @@ public sealed class Prefs
 
     private static Prefs Load()
     {
-        try { return JsonSerializer.Deserialize<Prefs>(File.ReadAllText(AppPaths.Prefs)) ?? new(); }
+        try { return JsonSerializer.Deserialize(File.ReadAllText(AppPaths.Prefs), AppJson.Default.Prefs) ?? new(); }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { return new(); }
     }
 
     public void Save()
     {
-        try { File.WriteAllText(AppPaths.Prefs, JsonSerializer.Serialize(this)); }
-        catch (IOException e) { Console.Error.WriteLine($"Prefs not saved: {e.Message}"); }
+        try { File.WriteAllText(AppPaths.Prefs, JsonSerializer.Serialize(this, AppJson.Default.Prefs)); }
+        catch (IOException e) { AgentLog.Line($"Prefs not saved: {e.Message}"); }
     }
 }
+
+/// Source-generated JSON: no reflection, so it survives trimming and NativeAOT (tools/publish.ps1),
+/// and starts faster. Add every type the app saves as JSON here.
+[JsonSourceGenerationOptions(WriteIndented = true)]
+[JsonSerializable(typeof(Prefs))]
+[JsonSerializable(typeof(UI.LayoutFile))]
+internal sealed partial class AppJson : JsonSerializerContext;

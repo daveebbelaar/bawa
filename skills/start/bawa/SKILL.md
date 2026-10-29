@@ -1,4 +1,4 @@
----
+﻿---
 name: bawa
 description: Build any Windows app. Start here to pick the next skill for a native Windows app.
 disable-model-invocation: true
@@ -12,6 +12,7 @@ skill for that step. One skill per call.
 ```text
 idea -> research -> clone (optional) -> app-brief -> user-stories -> new-windows-app
      -> windows-design + design-system + app-icon -> improve-loop (ux, code, design, verify, commit) -> repeat
+     -> distribute
 ```
 
 Pick the app's name first (app-brief, step 1) and create
@@ -59,6 +60,7 @@ page, and the real icon in every snapshot.
 | Build it and look at every page | `build-and-verify` |
 | Tests, a self-test, or an agent that drives the running app | `test-windows-app` |
 | Work through the backlog on its own | `improve-loop` |
+| Share it: a release, signing, an installer, WinGet, the Store | `distribute` |
 
 ## Done when
 

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -73,7 +73,7 @@ public static class GridProbes
     }
 
     public static void Write(FrameworkElement root, string path) =>
-        File.WriteAllText(path, JsonSerializer.Serialize(Collect(root), new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(path, JsonSerializer.Serialize(Collect(root), AppJson.Default.LayoutFile));
 
     private static IEnumerable<FrameworkElement> Descendants(DependencyObject parent)
     {

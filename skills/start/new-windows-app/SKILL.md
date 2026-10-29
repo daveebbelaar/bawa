@@ -1,4 +1,4 @@
----
+﻿---
 name: new-windows-app
 description: Create a native Windows app in WinUI 3 from a working template (C# and .NET 10, SQLite, build script, icon script, snapshot mode, self-test, git), with no Visual Studio. Use when the user wants to start a new Windows app or scaffold a WinUI project.
 argument-hint: "<AppName> [parent-folder]"
@@ -100,12 +100,13 @@ edit every file. It builds with the .NET SDK alone.
 
 ## Why unpackaged
 
-A packaged (MSIX) app needs a signing certificate, an install step, and
-Visual Studio tooling for most changes. An unpackaged app is an `.exe` in
-a folder, which an agent can rebuild and relaunch in seconds. Switch to
-MSIX only when the app needs package identity: Store distribution, a
-background task, a share target, or a startup task without the registry.
-The `os-integrations` skill notes which features need identity.
+A packaged (MSIX) app needs a signing certificate and an install step for
+every run (Microsoft's `winapp` CLI can do both from the command line now).
+An unpackaged app is an `.exe` in a folder, which an agent can rebuild and
+relaunch in seconds. PowerToys ships its WinUI modules the same way. When a
+feature needs package identity (a share target, a startup task, Explorer
+context menus, the Windows AI APIs), add a sparse package instead of
+switching: the `distribute` skill shows how.
 
 ## A CLI for agents
 

@@ -1,4 +1,4 @@
-# BAWA
+﻿# BAWA
 
 Agent skills for building native Windows apps. Installed as a Claude Code and
 Codex plugin from `.claude-plugin/`, or through `npx skills add`.
@@ -33,10 +33,12 @@ same, same writing rules. Only the stack differs.
 | Snapshots of every page in light and dark | `tools/snap.ps1` (`-Pages all,settings`, `-Accent green`, `-Grid`) |
 | Grid checks | `tools/grid-lint.ps1`, `tools/check-layout.ps1` |
 | Icon from `Icon/AppIcon.svg` | `tools/make-icon.ps1 -Review` |
+| A build for other PCs (no .NET needed), checked by the self-test | `tools/publish.ps1` (`-Aot` NativeAOT, `-Zip`) |
 
 Environment flags the app reads: `APP_STORE` (a file in `%TEMP%`),
 `APP_SEED=1`, `APP_SNAPSHOT=<dir>`, `APP_SNAPSHOT_PAGES`, `APP_ACCENT`,
-`APP_GRID=1`, `APP_LOG=<file>`, and the `--selftest` argument.
+`APP_GRID=1`, `APP_LOG=<file>`, and the `--selftest` argument. The tools run the installed
+app, or the build in `APP_EXE`.
 
 ## Layout
 

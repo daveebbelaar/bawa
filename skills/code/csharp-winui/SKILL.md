@@ -48,6 +48,9 @@ to a control lives on it.
   type.
 - After changing the object a page binds through (`Model.Selection`), call
   `Bindings.Update()` if the binding path starts above the changed object.
+- JSON goes through source generation: add each saved type to `AppJson`
+  (`[JsonSerializable(typeof(T))]`) and pass `AppJson.Default.T`. Reflection
+  JSON breaks under NativeAOT and trimming (`IL2026`, `IL3050`).
 - Small preferences go in `Prefs` (JSON next to the database). Unpackaged
   apps have no `ApplicationData.Current.LocalSettings`: it throws. Secrets
   go in the Windows Credential Locker (`PasswordVault`) or DPAPI

@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
@@ -14,12 +14,12 @@ C# and WinUI 3. Local data. No Visual Studio.
 [![Windows 11](https://img.shields.io/badge/Windows-11-0078D4?style=flat-square&logo=windows11&logoColor=white)](#requirements)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#requirements)
 [![WinUI 3](https://img.shields.io/badge/WinUI-3-0067C0?style=flat-square)](#requirements)
-[![21 skills](https://img.shields.io/badge/skills-21-5E5CE6?style=flat-square)](#skills)
+[![22 skills](https://img.shields.io/badge/skills-22-5E5CE6?style=flat-square)](#skills)
 [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-D97757?style=flat-square&logo=claude&logoColor=white)](#install)
 [![Codex plugin](https://img.shields.io/badge/Codex-plugin-10A37F?style=flat-square)](#install)
 [![MIT license](https://img.shields.io/badge/license-MIT-F4C430?style=flat-square)](LICENSE)
 
-**[Quick start](#quick-start) · [How it works](#how-it-works) · [Skills](#skills) · [Specs](#specs) · [Install](#install)**
+**[Quick start](#quick-start) Â· [How it works](#how-it-works) Â· [Skills](#skills) Â· [Specs](#specs) Â· [Install](#install)**
 
 </div>
 
@@ -92,10 +92,17 @@ Every app BAWA makes can check itself. It has a self-test that runs its real fun
 <tr><td nowrap><a href="skills/design/design-kit/SKILL.md"><samp>design-kit</samp></a></td><td>Your own parts, not Fluent's: three token layers, type, an icon set, every part in every state, custom title bar, and a parts gallery</td></tr>
 <tr><td nowrap><a href="skills/design/design-from-app/SKILL.md"><samp>design-from-app</samp></a></td><td>Rebuilds the look of an app you like from its screenshots: measures sizes, type, and colors, then compares pixel by pixel until it matches</td></tr>
 <tr><td nowrap><a href="skills/design/app-icon/SKILL.md"><samp>app-icon</samp></a></td><td>An SVG app icon rendered to every Windows size, hand-tuned where small, checked on light and dark</td></tr>
-<tr><td rowspan="3" valign="top"><b>Ship</b></td><td nowrap><a href="skills/ship/build-and-verify/SKILL.md"><samp>build-and-verify</samp></a></td><td>Build, install, snapshot every page in light and dark, look at them</td></tr>
+<tr><td rowspan="4" valign="top"><b>Ship</b></td><td nowrap><a href="skills/ship/build-and-verify/SKILL.md"><samp>build-and-verify</samp></a></td><td>Build, install, snapshot every page in light and dark, look at them</td></tr>
 <tr><td nowrap><a href="skills/ship/test-windows-app/SKILL.md"><samp>test-windows-app</samp></a></td><td>xUnit, an in-app self-test, UI Automation from outside, a debug bridge an agent can drive</td></tr>
 <tr><td nowrap><a href="skills/ship/improve-loop/SKILL.md"><samp>improve-loop</samp></a></td><td>Works through the backlog one story per commit until a milestone is done</td></tr>
+<tr><td nowrap><a href="skills/ship/distribute/SKILL.md"><samp>distribute</samp></a></td><td>A build that runs anywhere (self-contained or NativeAOT), signing, a zip or installer, WinGet, the Store</td></tr>
 </table>
+
+## Why this stack
+
+C# and WinUI 3 is what Microsoft recommends for new Windows apps in 2026, and the unpackaged, self-contained setup BAWA uses is the one PowerToys requires for its WinUI modules. [docs/STACK.md](docs/STACK.md) compares it with WPF, Avalonia, Uno, MAUI, Tauri, Electron, and the rest, with sources and measured startup times.
+
+Microsoft also ships a WinUI plugin for Claude Code (`winui@win-dev-skills`) and the `winapp` CLI. They focus on setup, packaged MSIX apps, and Developer Mode. BAWA is the whole pipeline (clone, stories, design, the self-test and snapshot loop, distribution) for unpackaged apps. You can install both.
 
 ## Specs
 
@@ -163,7 +170,8 @@ bawa/scripts/link-skills.ps1      # links every skill into ~/.claude/skills and 
 ## Requirements
 
 - Windows 11 (Windows 10 version 2004 or later runs the apps, without Mica)
-- The .NET 10 SDK: `winget install Microsoft.DotNet.SDK.10`. Nothing else: no Visual Studio, no Windows App SDK installer
+- The .NET 10 SDK: `winget install Microsoft.DotNet.SDK.10`. Nothing else to build and run: no Visual Studio, no Windows App SDK installer
+- To ship: `tools/publish.ps1` makes a build that needs nothing on the other PC. Its faster NativeAOT option also needs the MSVC linker from Visual Studio Build Tools (the `distribute` skill has the one-line install)
 - An agent that supports skills: Claude Code, Codex, Cursor, Gemini CLI
 - For `clone` on native apps: computer use in the Claude desktop app
 

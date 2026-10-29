@@ -1,4 +1,4 @@
-# __APP_NAME__
+﻿# __APP_NAME__
 
 A native Windows app in WinUI 3. It runs on this PC only, with a local
 SQLite database and no server.
@@ -25,6 +25,7 @@ SQLite database and no server.
 - Never test against the real database in `%LOCALAPPDATA%\__APP_NAME__\`.
 - Then check the grid: `tools/grid-lint.ps1` and `tools/check-layout.ps1`. Both print PASS.
 - A change is done when the build has no errors or warnings, the grid checks pass, and you looked at the light and dark snapshots.
+- A build for other PCs: `tools/publish.ps1` (self-contained) or `tools/publish.ps1 -Aot` (NativeAOT, starts about 2.5x faster). It fails on trim warnings and runs the self-test on the result. JSON goes through `AppJson` (source generated), never reflection.
 
 ## Design rules
 
