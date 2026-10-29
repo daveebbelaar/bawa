@@ -26,7 +26,8 @@ function Invoke-App {
         $null = $process.Handle   # without this, ExitCode is empty after the process ends
         $finished = $process.WaitForExit($TimeoutSec * 1000)
         if (-not $finished) { Stop-Process -Id $process.Id -Force }
-        Get-Content $log -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+        # The app writes UTF-8; Windows PowerShell 5.1 would read it as the ANSI code page ("Readingâ€¦").
+        Get-Content $log -Encoding UTF8 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
         if (-not $finished) { Write-Host "TIMEOUT after $TimeoutSec s"; return 1 }
         if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 1) {
             Write-Host ("CRASH exit code 0x{0:X8}: see Event Viewer > Windows Logs > Application" -f $process.ExitCode)

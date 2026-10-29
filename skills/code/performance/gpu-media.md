@@ -3,13 +3,15 @@
 For apps that capture, decode, process, or encode video, audio, or large
 images. Each recipe: symptom, cause, fix. The lessons come from BAMA's
 measured media apps on the Mac; the APIs here are their Windows
-counterparts. Measure your own numbers on Windows before you trust any
-gain.
+counterparts. The zero-copy, device, and screen recording parts ran in
+Onyx for Windows's recorder on Windows 11 build 26200. Measure your own
+numbers on Windows before you trust any gain.
 
 ## Contents
 
 - Rules
 - Zero-copy GPU input
+- Own the device
 - Keep the GPU off the capture callback
 - Back-pressure without drops
 - Bounded caches and pools
@@ -39,44 +41,67 @@ gain.
 copies and conversions.
 **Cause:** each frame copied to the CPU (`SoftwareBitmap.CreateCopyFromSurfaceAsync`)
 or converted between pixel formats on the CPU.
-**Fix:** keep the frame as a texture and process it on the GPU.
+**Fix:** keep the frame as a texture and process it on the GPU. This is
+the shape Onyx's recorder ran, with a vtable call instead of a COM
+interface declaration:
 
 ```csharp
-using System.Runtime.InteropServices.Marshalling;
 using Windows.Graphics.DirectX.Direct3D11;
 
-[GeneratedComInterface]
-[Guid("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1")]
-internal partial interface IDirect3DDxgiInterfaceAccess
+internal static unsafe class Surfaces
 {
-    nint GetInterface(in Guid iid);
-}
-
-internal static class Surfaces
-{
-    private static readonly Guid ID3D11Texture2D = new("6F15AAF2-D208-4E89-9AB4-489535D34F9C");
+    private static readonly Guid IID_ID3D11Texture2D = new("6F15AAF2-D208-4E89-9AB4-489535D34F9C");
+    private static readonly Guid IID_IDirect3DDxgiInterfaceAccess = new("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1");
 
     /// The frame's ID3D11Texture2D, without a copy. Marshal.Release it when done.
     public static nint Texture(IDirect3DSurface surface)
     {
-        var unknown = WinRT.MarshalInterface<IDirect3DSurface>.FromManaged(surface);
+        var abi = WinRT.MarshalInterface<IDirect3DSurface>.FromManaged(surface);
         try
         {
-            var access = (IDirect3DDxgiInterfaceAccess)new StrategyBasedComWrappers().GetOrCreateObjectForComInstance(unknown, CreateObjectFlags.None);
-            return access.GetInterface(ID3D11Texture2D);
+            Marshal.ThrowExceptionForHR(Marshal.QueryInterface(abi, in IID_IDirect3DDxgiInterfaceAccess, out var access));
+            try
+            {
+                var iid = IID_ID3D11Texture2D;
+                nint texture;
+                // IDirect3DDxgiInterfaceAccess::GetInterface is slot 3 (IUnknown's three come first).
+                Marshal.ThrowExceptionForHR(((delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)(*(void***)access)[3])(access, &iid, &texture));
+                return texture;
+            }
+            finally { Marshal.Release(access); }
         }
-        finally { Marshal.Release(unknown); }
+        finally { Marshal.Release(abi); }
     }
 }
 ```
 
 - Capture in the format the next stage wants. `Windows.Graphics.Capture`
-  delivers `B8G8R8A8UIntNormalized`; hardware H.264 and HEVC encoders
-  take NV12. Convert once on the GPU (the Media Foundation video
-  processor, or a shader), not per pixel in C#.
+  delivers `B8G8R8A8UIntNormalized`. `MediaTranscoder` took the BGRA
+  surfaces from a `MediaStreamSource` as they were and converted them;
+  with the Sink Writer, hardware H.264 and HEVC encoders take NV12.
+  Convert once on the GPU (the Media Foundation video processor, or a
+  shader), not per pixel in C#.
 - With Win2D, `CanvasBitmap.CreateFromDirect3D11Surface(device, frame.Surface)`
   wraps the frame without a copy. The Win2D device and the capture device
   must be the same device.
+
+## Own the device
+
+**Symptom:** a recorder that copies frames into its own textures crashes
+or corrupts frames once Media Foundation starts reading them.
+**Cause:** the screenshot recipe's device releases the `ID3D11Device` and
+its immediate context, and nothing protects the context from Media
+Foundation's threads.
+**Fix:** one device for the app's lifetime that keeps both pointers, with
+`ID3D10Multithread.SetMultithreadProtected(TRUE)` (slot 5) right after
+`D3D11CreateDevice`, and a `Lock` around every use of the immediate
+context. The vtable slots Onyx used, no package needed:
+`ID3D11Device` 5 `CreateTexture2D`, 9 `CreateRenderTargetView`;
+`ID3D11DeviceContext` 46 `CopySubresourceRegion`, 47 `CopyResource`, 50
+`ClearRenderTargetView`. Wrap your own texture for WinRT through
+`IDXGISurface` and `CreateDirect3D11SurfaceFromDXGISurface`. The whole
+`GpuDevice` is in the os-integrations skill's
+[capture.md](../os-integrations/capture.md), "Screen recording to MP4".
 
 ## Keep the GPU off the capture callback
 
@@ -120,6 +145,11 @@ internal sealed class GpuMailbox
 Use `Direct3D11CaptureFramePool.CreateFreeThreaded`, so `FrameArrived`
 runs on a worker thread and not on the UI thread.
 
+A plain GPU copy into a texture of your own is cheap enough to do in the
+callback. Onyx's recorder copies each frame there (two pool buffers, the
+frame disposed at once) and recorded a window that changed on every
+refresh at 30 fps with none dropped.
+
 ## Back-pressure without drops
 
 **Symptom:** frames dropped when the encoder is not ready.
@@ -129,6 +159,11 @@ the capture pool gets its buffers back at once. Cap the queue (90 frames
 is about 3 seconds at 30 fps) and count when you hit the cap. Trim your
 texture pool back down when the queue empties, or memory stays high
 after one stall.
+
+With `MediaStreamSource`, a `BlockingCollection` is the queue:
+`SampleRequested` blocks its Media Foundation thread on `TryTake` until a
+frame comes, frees each texture in `sample.Processed`, and returns a null
+sample after `CompleteAdding`, which ends the transcode.
 
 ## Bounded caches and pools
 
@@ -181,6 +216,35 @@ display-linked callback. Keep a few frames decoded ahead.
 - Write to a network drive through a local file: write locally, copy to
   `.partial`, check the size, rename.
 
+Screen recording with `MediaStreamSource` and `MediaTranscoder` (the
+code is in the os-integrations skill's
+[capture.md](../os-integrations/capture.md)):
+
+- Source: `VideoEncodingProperties.CreateUncompressed(Bgra8, w, h)`,
+  `BufferTime = TimeSpan.Zero`, and `Starting` calls
+  `SetActualStartPosition(TimeSpan.Zero)`. Samples:
+  `MediaStreamSample.CreateFromDirect3D11Surface(texture.Surface, time)`.
+- Profile: `MediaEncodingProfile.CreateMp4(HD1080p)`, then set the
+  video width, height, bitrate, and frame rate, and `profile.Audio = null`
+  when the source has no audio stream.
+- Output: `FileRandomAccessStream.OpenAsync(path, ReadWrite, None,
+  CreateAlways)`. No `StorageFile`, works unpackaged.
+- Frame rate: `GraphicsCaptureSession.MinUpdateInterval` (Windows 11
+  24H2 and later) at 90 percent of the frame time. At exactly 1/fps on a
+  60 Hz display, Onyx measured 26 fps for a 30 fps setting; at 90
+  percent, 30.1. Older builds send frames at the display rate; drop the
+  extra ones by timestamp.
+- Time: `Direct3D11CaptureFrame.SystemRelativeTime` is QPC. Movie time is
+  that minus the first frame's. Anything you add at "now" (a repeated
+  last frame at stop) uses
+  `Stopwatch.GetTimestamp() * TimeSpan.TicksPerSecond / Stopwatch.Frequency`.
+- A still picture sends no frames. Repeat the last frame at the stop
+  time, or the movie is short: a 2 s still recording had 1 frame.
+- Prepare takes about 0.3 s after `StartCapture`, and the movie starts at
+  the first frame.
+- Stopping waits for the MP4 index (Onyx allowed 5 s). A synchronous quit
+  loses a running recording.
+
 ## Overlays and filters
 
 - Prepare overlays for frame n+2 on worker threads while frame n renders.
@@ -205,7 +269,8 @@ display-linked callback. Keep a few frames decoded ahead.
 ## Lifetimes
 
 - Dispose every `Direct3D11CaptureFrame` right after use, and the frame
-  pool and `GraphicsCaptureSession` when capture stops.
+  pool and `GraphicsCaptureSession` when capture stops. With a two-buffer
+  pool, one held frame stalls the capture with no error.
 - `MFStartup` once at launch and `MFShutdown` once at exit when you call
   Media Foundation directly.
 - Release every COM pointer you get from `GetInterface` or
@@ -228,3 +293,12 @@ display-linked callback. Keep a few frames decoded ahead.
   the time to the wrong code.
 - One benchmark at a time, and write down the background load. Another
   busy process causes drops that look like an app bug.
+- Measure the recorder, not the test source. A test window that changes
+  on a 33 ms `DispatcherTimer` ticks about 20 times a second (the 15.6 ms
+  system timer). Change it from `CompositionTarget.Rendering` instead.
+- Read an MP4 back in a self-test with no ffprobe:
+  `MediaClip.CreateFromFileAsync` gives `OriginalDuration` and
+  `GetVideoEncodingProperties()` (subtype, width, height), and
+  `MediaComposition.GetThumbnailAsync` gives frames. Works unpackaged.
+- Print measured numbers (fps, drops, duration) on pass too, not only on
+  failure, so they can be compared run to run.

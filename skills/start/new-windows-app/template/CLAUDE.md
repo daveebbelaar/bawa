@@ -18,8 +18,9 @@ SQLite database and no server.
 - Unit tests: `dotnet test tests/__APP_NAME__.Core.Tests`.
 - Self-test (the app's real functions on a seeded `%TEMP%` store): `tools/selftest.ps1`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.cs`.
 - After every UI change, take snapshots with sample data and look at them: `tools/snap.ps1`.
-  It writes `%TEMP%\__APP_NAME__-shots\<page>-light.png` and `-dark.png` for every navigation page and Settings, then quits. `tools/snap.ps1 -Pages all,settings` limits the pages.
+  It writes `%TEMP%\__APP_NAME__-shots-<checkout>\<page>-light.png` and `-dark.png` for every navigation page and Settings, then quits. `tools/snap.ps1 -Pages all,settings` limits the pages.
   For a dialog, flyout, or second window, add a capture to `Snapshot.cs` like the page loop.
+- In a git worktree, or with other agents building at the same time: `tools/dev.ps1 build|selftest|snap` builds this checkout without installing anything. Each checkout has its own build, test store, and snapshot folders.
 - The app writes agent output (PASS lines, snapshot paths, crashes) to the file in `APP_LOG`; the tools print it. A WinUI app has no dependable stdout.
 - Snapshots, seed data, and the self-test refuse to run without `APP_STORE` in `%TEMP%`.
 - Never test against the real database in `%LOCALAPPDATA%\__APP_NAME__\`.

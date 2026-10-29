@@ -51,7 +51,7 @@ a preview on the right, the accent color on the selected row.
 | Part | API | Permission |
 | --- | --- | --- |
 | Watch the clipboard | `AddClipboardFormatListener` on the tray icon's window, `WM_CLIPBOARDUPDATE`, `GetClipboardSequenceNumber` | None |
-| Read an item | `OpenClipboard`, `GetClipboardData` for `CF_HDROP` (`DragQueryFile`), `CF_UNICODETEXT`, the registered `PNG` format, `CF_DIBV5` or `CF_DIB` | None |
+| Read an item | `OpenClipboard`, `GetClipboardData` for `CF_HDROP` (`DragQueryFile`), `CF_UNICODETEXT`, the registered `PNG` format, `CF_DIBV5` or `CF_DIB`. Win32, not WinRT `Clipboard.GetContent`: WinRT gives no access to the `CanIncludeInClipboardHistory` DWORD or the `Clipboard Viewer Ignore` marker, and no control over which formats are rendered | None |
 | Skip passwords | `RegisterClipboardFormat` and `IsClipboardFormatAvailable` for `ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory`, `Clipboard Viewer Ignore` | None |
 | Source app | `GetForegroundWindow`, `GetWindowThreadProcessId`, `QueryFullProcessImageName`, `FileVersionInfo.FileDescription` | None |
 | Global shortcut | `RegisterHotKey` with `MOD_WIN \| MOD_ALT \| MOD_NOREPEAT` and `V` | None |
@@ -73,7 +73,7 @@ Types to create:
 
 - `ClipItem` (Core, with `Preview` and `FilePaths`) and `ClipStore` (Core, SQLite: add, dedupe, trim, delete, clear).
 - `ClipboardHistory` (`ObservableObject`): listens, reads, skips, and feeds `ClipStore`; `Copy`, `Delete`, `Clear`.
-- `ClipboardReader` and `ClipboardWriter`: the Win32 calls, the own marker format, and the skip list.
+- `ClipboardReader` and `ClipboardWriter`: the Win32 calls, the own marker format, and the skip list. `ClipboardHistory` reads through an `IClipboardSource` (sequence number and read) and writes through an `IClipboardTarget`, so the self-test swaps in fakes and never touches the person's clipboard.
 - `SyntheticInput` (Ctrl+V with a marker) and `Elevation` (is this window's process elevated).
 - `ClipsPanel` (`ObservableObject`: search, selection, `Paste(item, pasteIntoApp)`), `ClipsWindow`, `ClipRow`, `ClipPreview`.
 - `HotkeyCenter`, `KeyCombo`, `ShortcutRecorder`, `SettingsPage`, `TrayIcon`.
@@ -86,11 +86,11 @@ Exact behavior:
 - Open with `OpenClipboard(trayHwnd)`. When it fails, retry up to 10 times, 50 ms apart. Close it in `finally`.
 - Read in this order, first hit wins: `CF_HDROP` (files), `CF_UNICODETEXT`, `PNG`, `CF_DIBV5` or `CF_DIB` (convert to PNG). Skip text that is only whitespace and go on to the image.
 - Image file name: the first 12 bytes of the SHA256 of the PNG, as hex, plus `.png`. Write only when the file is missing. Store PNG data as it came.
-- Add: remove any item with the same kind, text, and image file, then insert at the top. The same copy twice moves to the top.
+- Add: write the PNG first, then the row. Remove any item with the same kind, text, and image file, then insert at the top. The same copy twice moves to the top. Load in insert order (`ORDER BY rowid DESC`): ordering by date loses the order of two copies in the same tick.
 - Limit: default 200, choices 50, 100, 200, 500, 1000, never under 10. Trimmed items delete their PNG when no other item uses it.
 - Save: write each change to Clips.db at once (SQLite with WAL). Load once at start.
 - Search: case-insensitive `Contains(query, StringComparison.CurrentCultureIgnoreCase)` on the preview or the app name. Preview: trimmed text, "Image", or file names joined with ", ".
-- Copy back: `OpenClipboard`, `EmptyClipboard`, then text as `CF_UNICODETEXT`, an image as `PNG` and `CF_DIB`, files as `CF_HDROP` (a `DROPFILES` header plus the paths). The listener then sees the same content and moves it to the top. That is the behavior you want.
+- Copy back: `OpenClipboard(ownerHwnd)`, `EmptyClipboard`, then text as `CF_UNICODETEXT`, an image as `PNG` and `CF_DIB`, files as `CF_HDROP` (a `DROPFILES` header plus the paths). The listener then sees the same content and moves it to the top. That is the behavior you want.
 - Paste: copy back, hide the panel, `SetForegroundWindow` on the window saved when the panel opened, wait until Alt, Shift, and Win are up (at most 500 ms), then send Ctrl+V 60 ms later. When the target is elevated, skip the keys: the item stays on the clipboard and a toast says "Copied. Press Ctrl+V: <app> runs as administrator."
 - Keys: Up, Down, Enter pastes, Ctrl+Enter copies only, Ctrl+Delete deletes, Ctrl+1 to 9 pastes that row, Esc closes. Double-click pastes. The panel closes when it loses activation.
 - Panel: 780 by 480 epx, top 16% below the top of the work area of the monitor with the pointer. Rows 40 epx. Image rows also show the relative time, since every image reads "Image".
@@ -124,7 +124,8 @@ public static void Paste()
 ### S-001 Keep every copy
 As the user, I copy text in any app and it is saved to the history.
 Acceptance:
-- [self] Text written with Set-Clipboard shows up as the first item within 1 s.
+- [self] With a fake `IClipboardSource` holding text and a new sequence number, posting `WM_CLIPBOARDUPDATE` to the listener window runs the real message path (the 100 ms wait, the sequence check) and the text shows up as the first item within 1 s. The self-test never writes or reads the real clipboard: a write lands in Win+V history and in any clipboard manager, and a restore cannot be exact.
+- [manual] Text copied in Notepad shows up as the first item within 1 s.
 - [unit] Copying the same text twice keeps one item, at the top.
 - [unit] With a limit of 50, the 51st copy drops the oldest item.
 - [self] The history survives a restart (Clips.db).
@@ -152,6 +153,7 @@ Status: todo
 As the user, I pick an item with the arrow keys and press Enter; it is pasted where my cursor was.
 Depends: S-002, S-003
 Acceptance:
+- [self] Enter pastes into a test window of the app's own through a fake `IClipboardTarget`. The test window's `TextBox.Paste` handler sets `Handled = true`, so it proves the Ctrl+V arrived without reading the clipboard. The item moves to the top and keeps its app name. The panel's hide on deactivate is off while the test runs, and the test checks `GetForegroundWindow()` before every step and retries: parallel test runs share one foreground.
 - [manual] Enter in Notepad pastes the item; the panel is gone before the paste lands.
 - [manual] The same works in a browser text field and in Word.
 - [manual] The pasted item moves to the top of the history.
@@ -183,13 +185,14 @@ As the user, a password copied from my password manager is not saved.
 Depends: S-001
 Acceptance:
 - [unit] A clipboard with ExcludeClipboardContentFromMonitorProcessing, CanIncludeInClipboardHistory set to 0, or Clipboard Viewer Ignore is skipped.
+- [self] A fake source with each of those formats, fed through the listener window, adds nothing.
 - [manual] Copying a password in KeePass adds nothing to the list.
 Status: todo
 
 ### S-008 Use the tray icon
 As the user, I right-click the tray icon and see Open Clips (with its shortcut), Settings, and Quit.
 Acceptance:
-- [unit] The menu model shows the current shortcut next to "Open Clips".
+- [unit] The menu model shows the current shortcut next to "Open Clips", Windows key first: "Win+Alt+V", not "Alt+Win+V".
 - [manual] No taskbar button while only the tray icon runs; closing Settings keeps the app running.
 Status: todo
 
@@ -231,6 +234,7 @@ Status: todo
 - Password managers mark their copies. KeePass sets `ExcludeClipboardContentFromMonitorProcessing`, `Clipboard Viewer Ignore`, and `CanIncludeInClipboardHistory` to 0. Without the skip list, passwords end up in a plain SQLite file.
 - Your own helper writes (a snippet expansion, a one-off paste) must carry the app's own format and `ExcludeClipboardContentFromMonitorProcessing`, or they flood the history of Clips, Ditto, and Win+V. Copying an item back is not marked on purpose, so it moves to the top.
 - `OpenClipboard` fails while another process has the clipboard open. Retry 10 times, 50 ms apart, and always `CloseClipboard` in `finally`. While you hold it open, no app on the PC can copy or paste.
+- `SetClipboardData` fails after `OpenClipboard(0)` plus `EmptyClipboard`. Open with an owner window (the tray and listener window, or a message-only window) for every write. WinRT `Clipboard.SetContent` hides this.
 - One copy can fire `WM_CLIPBOARDUPDATE` more than once, because some apps write their formats in steps. Wait 100 ms and compare `GetClipboardSequenceNumber` before reading.
 - Read only the formats you use. A delayed-rendered format makes the owning app render it when you ask, and a busy owner (Excel with a big range) blocks you while it does.
 - Read order matters, and it differs from macOS. Excel and Word put text and a picture of the selection on the clipboard. Read `CF_HDROP` first, then text, then the image, or a range of cells shows up as a picture.
@@ -242,7 +246,9 @@ Status: todo
 - `SendInput` into an app running as administrator is blocked by UIPI, and neither the return value nor `GetLastError` says so. Check the target's elevation first. When `OpenProcessToken` fails with access denied, treat the target as elevated too.
 - Ctrl+Alt+letter fires on AltGr, which types characters on many layouts (AltGr+C is ć on Polish). The default is Win+Alt+V, which also leaves Win+V to Windows.
 - Rows are 40 epx, so never load the full PNG for a row. Use a `BitmapImage` with `DecodePixelType = Logical` and `DecodePixelWidth = 24`; XAML decodes it small, off the UI thread.
-- The first open built the panel and its XAML tree and came up late. Build it 2 s after launch, show it off screen with `AppWindow.Show(false)`, let it draw one frame, and hide it. Focus the search box in the `Activated` handler.
+- The first open built the panel and its XAML tree and came up late. Build it 2 s after launch, show it off screen with `AppWindow.Show(false)`, let it draw one frame, and hide it. Focus the search box in the `Activated` handler, again on `Loaded`, and once more at low dispatcher priority: on the first open `Activated` can come before `Loaded`, and focus set while the content is not loaded does nothing.
+- An `AutoSuggestBox` raises `TextChanged` for a change made in code, later, on its own, and it can reset the selection after your code moved it. Refresh only when `args.Reason == AutoSuggestionBoxTextChangeReason.UserInput`, and refresh directly when code sets the text.
+- Write shortcuts with the Windows key first, as Windows does: "Win+Alt+V", "Win+Shift+S". A `KeyCombo.ToString()` that lists modifiers in flag order reads "Alt+Win+V".
 - Explorer restarts drop the tray icon. Re-add it on the `TaskbarCreated` message. A message-only window never gets that broadcast, so the tray and listener window is a hidden normal window.
 - Closing the Settings window must not end the app. Cancel `AppWindow.Closing` and call `AppWindow.Hide()`.
 - Changed from BAMA: the 0.5 s poll is now an event (`WM_CLIPBOARDUPDATE`) plus a 100 ms wait, since Windows tells you about every change. The 1 s save delay is gone, since SQLite writes one row cheaply. Rows are 40 epx, not 38, to sit on BAWA's 4 epx grid. The 60 pt shadow margin is gone, because DWM draws the shadow outside the window. There is no permission to grant, so the Accessibility story became the elevated-app story.

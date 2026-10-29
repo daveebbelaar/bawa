@@ -1,4 +1,4 @@
-# Specs
+﻿# Specs
 
 Build plans for small Windows apps you can build today with BAWA. Each spec
 is one app. Give it to your agent and it builds the app for you.
@@ -46,6 +46,46 @@ Start with the window snapper. It's the smallest, and it teaches the two
 things most of these apps need: a global shortcut and a tray icon. It is
 also the one BAWA has already built end to end on a real PC: see
 [../examples/Snap](../examples/Snap).
+
+## Build several specs as one app
+
+The specs also combine into one tray app. Onyx for Windows holds all
+twelve, and six agents built its features side by side. The pattern:
+
+- **One tray host with a feature contract.** The host owns the single
+  tray icon and its flyout, Settings, the shortcut table, and the test and
+  snapshot modes. Each spec becomes a feature with an id, actions, a
+  Settings page, a flyout block, `Start` and `Stop` (Stop undoes all of
+  Start), self-tests, and snapshot surfaces.
+- **One shared keyboard hook.** The switcher, snippets, and the keystroke
+  overlay subscribe to one `WH_KEYBOARD_LL` hook in the host. The event
+  carries the injected flag and `dwExtraInfo`, so each feature can tell its
+  own keys from other synthetic input and filter for itself.
+- **Default shortcuts that never collide.** Every default comes from one
+  table, and two actions never share one:
+
+  | Spec | Default |
+  | --- | --- |
+  | window-snapper | Ctrl+Alt+Left, Right, Up, Down, Enter, Backspace; Ctrl+Alt+Shift+Left, Right |
+  | window-switcher | Alt+` through the keyboard hook |
+  | launcher | Alt+Space |
+  | clipboard-history | Win+Alt+V |
+  | color-picker | Ctrl+Alt+Shift+C |
+  | screenshots | Ctrl+Alt+Shift+3, 4, 5 |
+  | text-snippets | none (keywords through the keyboard hook) |
+  | screen-recorder, toolbox, creator-tools, tray-stats, dev-toolkit | none; the person sets them |
+
+  Write the Windows key first: Win+Alt+V, not Alt+Win+V.
+- **One agent per feature, in its own git worktree.** Each agent edits only
+  its feature's folders and writes notes on what the spec got wrong. Merge
+  one feature at a time. Give no feature a namespace named `Windows` or
+  after a WinRT type (`Clipboard`, `Colors`, `Launcher`): it shadows that
+  name in every other feature, and only the merge shows it.
+
+Parallel test runs share one foreground and one screen, so a self-test uses
+its own test windows, fakes the clipboard, and never adds a tray icon.
+Where an agent hit one of these, the spec's acceptance lines say how. The
+full guide: [suite.md](../skills/start/new-windows-app/suite.md).
 
 ## What a spec holds
 

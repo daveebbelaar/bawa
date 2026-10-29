@@ -114,6 +114,50 @@ presses or even find other processes' windows, so the physical key press
 stays a `[manual]` line. A self-test must never act on the window in
 front: that is the person's window.
 
+### Self-tests that never touch the person's PC
+
+A self-test runs the real code on a real desktop. These patterns kept
+twelve features' tests safe in Onyx:
+
+- **Test windows of your own**, opened and closed by the check, for
+  anything that moves, captures, types into, or reads a window. Paint
+  known colors in them and assert exact pixels. Put them in a corner, not
+  the center, and turn off their transitions (a read mid-fade gave
+  `#FE3B30` for `#FF3B30`).
+- **Seams for the clipboard.** Reads and writes go through a small
+  interface the self-test swaps for a fake; post `WM_CLIPBOARDUPDATE` to
+  the feature's own listener so the real message path still runs. Never
+  write and restore: a restore is never exact, and every write lands in
+  Win+V history.
+- **A test registry key** (`HKCU\Software\<App>SelfTest`) for anything
+  that writes settings, then read the real value only, and compare it
+  before and after the run.
+- **Never full-screen captures**, never the real tray (Windows keeps a
+  permanent `NotifyIconSettings` entry for every exe path that adds an
+  icon), never the microphone, never a process you did not start.
+- **Aim an area** instead: give capture code a seam that takes a
+  rectangle, and point it at your test window.
+- **Send input only to your own window, and check first.** Right before
+  every `SendInput`, check that your test window is in front; otherwise
+  send nothing, wait, and retry. Mark your own input (`dwExtraInfo`) so
+  your hooks can tell it apart.
+
+### Several agents on one desktop
+
+When agents build in parallel (one per feature, each in its own git
+worktree), their test windows fight for the foreground. Checks that read
+"which window is in front" fail at random, while everything else passes.
+
+- Read the front window right after the action, not later.
+- Turn off "hide on deactivate" for a panel during its checks.
+- Treat a lone foreground failure while other agents run as unproven, and
+  run the full self-test again once the desktop is quiet before you call
+  it a bug. In Onyx, two launcher checks failed with six agents running
+  and passed alone.
+- Give each checkout its own build folder, test store, and snapshot
+  folder (the template names them after the checkout folder), and run
+  the build with `tools/dev.ps1`, which never installs.
+
 ## 3. UI Automation from outside
 
 Windows exposes every control to screen readers through UI Automation.

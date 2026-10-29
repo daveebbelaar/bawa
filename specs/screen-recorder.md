@@ -49,14 +49,14 @@ Native WinUI, system accent color. Acrylic capsule control with a red record dot
 | Tray icon, no taskbar button | `Shell_NotifyIcon`, `NOTIFYICON_VERSION_4` ([recipe](../skills/code/os-integrations/recipes.md#tray-icon)) | None |
 | Video frames | `GraphicsCaptureItem.TryCreateFromDisplayId` or `TryCreateFromWindowId` (`IGraphicsCaptureItemInterop.CreateForMonitor` or `CreateForWindow` on Windows 10), `Direct3D11CaptureFramePool.CreateFreeThreaded`, `GraphicsCaptureSession` ([recipe](../skills/code/os-integrations/recipes.md#screen-capture)) | Capture border unless the user allows borderless |
 | Hide the border | `GraphicsCaptureAccess.RequestAccessAsync(GraphicsCaptureAccessKind.Borderless)`, `IsBorderRequired = false` (Windows 11) | One prompt |
-| GPU device, crop | `D3D11CreateDevice` with `D3D11_CREATE_DEVICE_BGRA_SUPPORT`, `CreateDirect3D11DeviceFromDXGIDevice`, `ID3D11DeviceContext.CopySubresourceRegion` (Vortice.Direct3D11) | None |
-| Write the MP4 | `MediaStreamSource` fed with `MediaStreamSample.CreateFromDirect3D11Surface`, `MediaTranscoder.PrepareMediaStreamSourceTranscodeAsync`, `MediaEncodingProfile.CreateMp4` or `CreateHevc` | None |
+| GPU device, crop | `D3D11CreateDevice` with `D3D11_CREATE_DEVICE_BGRA_SUPPORT`, `CreateDirect3D11DeviceFromDXGIDevice`, `ID3D10Multithread.SetMultithreadProtected(TRUE)`, `ID3D11DeviceContext.CopySubresourceRegion` (Vortice.Direct3D11, or direct vtable calls with no package) | None |
+| Write the MP4 | `MediaStreamSource` fed with `MediaStreamSample.CreateFromDirect3D11Surface`, `MediaTranscoder.PrepareMediaStreamSourceTranscodeAsync`, `MediaEncodingProfile.CreateMp4` or `CreateHevc`, written to `FileRandomAccessStream.OpenAsync(path, ReadWrite, None, CreateAlways)` (no `StorageFile`, works unpackaged) | None |
 | HEVC available? | `CodecQuery.FindAllAsync(CodecKind.Video, CodecCategory.Encoder, CodecSubtypes.VideoFormatHevc)` | None |
 | System audio | WASAPI loopback (`AUDCLNT_STREAMFLAGS_LOOPBACK`), through NAudio `WasapiLoopbackCapture` | None |
 | Microphone | WASAPI capture, through NAudio `WasapiCapture` | Microphone privacy setting |
 | Webcam bubble | `MediaCapture`, `MediaSource.CreateFromMediaFrameSource`, `MediaPlayerElement` in a round topmost window | Camera privacy setting |
 | Keep own windows out | `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` | None |
-| Poster frame | `MediaComposition.GetThumbnailAsync` | None |
+| Poster frame, read a file back | `MediaClip.CreateFromFileAsync` (`OriginalDuration`, `GetVideoEncodingProperties()`), `MediaComposition.GetThumbnailAsync` | None |
 | One copy running | `AppInstance.FindOrRegisterForKey` ([recipe](../skills/code/os-integrations/recipes.md#single-instance)) | None |
 
 Windows has no Screen Recording permission. Windows.Graphics.Capture draws a yellow border
@@ -82,17 +82,28 @@ Behavior that matters:
 - Start order: check mic and camera access if on, bubble, area outline, countdown, capture
   session, control.
 - Defaults: 30 fps, H.264, pointer on, countdown on, system audio off, mic off, camera off.
-- Session: `IsCursorCaptureEnabled` from the pointer option. Frame rate: `MinUpdateInterval =
-  1 / fps` where it exists (Windows 11 24H2), and on older builds drop any frame that arrives
-  sooner than 1 / fps after the last kept one.
+- Session: `IsCursorCaptureEnabled` from the pointer option. Frame rate: `MinUpdateInterval` at
+  90% of the frame time (`0.9 / fps`) where it exists (Windows 11 24H2). Frames land on display
+  refreshes, so exactly 1 / fps on a 60 Hz display records 26 fps for a 30 fps setting; 90% gives
+  30.1. Then drop any frame that arrives sooner than 1 / fps minus 2 ms after the last kept one.
+- Movie clock: the first frame is time zero. `SystemRelativeTime` is on the QPC clock, so "now"
+  on the same clock is `Stopwatch.GetTimestamp() * TimeSpan.TicksPerSecond / Stopwatch.Frequency`.
+- End frame: on stop, repeat the last frame at the stop time. A still screen sends no frames, so
+  without it a 2 s still recording has one frame and a short movie.
 - Output size: one scale factor so the long side fits 4096 (H.264) or 8192 (HEVC) and the area
   fits 4096 x 2304 or 8192 x 4320 pixels, never above 1, then each side rounded down to even.
   The encoding profile gets that size; the transcoder scales.
 - Area: crop each display frame on the GPU with `CopySubresourceRegion`. The source box is
   relative to the display's top-left: `x = rect.Left - monitor.Left, y = rect.Top - monitor.Top`.
   Displays left of or above the main one have negative `monitor.Left` or `monitor.Top`.
-- Window: the size is fixed at the start. When the window grows or shrinks, call
-  `framePool.Recreate` with the new size and copy the overlap into the fixed frame, black around it.
+- Window: the video is the visible frame. `GraphicsCaptureItem.Size` for a window equals its
+  `GetWindowRect` (800 x 600 for a 640 x 480 epx window at 125%), and each frame holds the
+  transparent resize border. Crop each frame with `CopySubresourceRegion` from
+  `(visible.X - outer.X, visible.Y - outer.Y)` at the size of `DWMWA_EXTENDED_FRAME_BOUNDS`
+  (784 x 592 there), then round each side down to even. The size is fixed at the start. When the
+  window grows or shrinks, call `framePool.Recreate` with the new size and copy the overlap into
+  the fixed frame, black around it. `GraphicsCaptureItem.Closed` fires when the window closes:
+  stop and save. A minimized window draws nothing and sends no frames: restore it first.
 - Pause stops feeding frames and audio and adds the paused time to an offset. Every timestamp
   is `frame.SystemRelativeTime - start - pausedTotal`. One file, no joining.
 - The MP4 is written to `%TEMP%\Rec\`. On stop it becomes `Rec Recording yyyy-MM-dd 'at' HH.mm.ss.mp4`
@@ -107,6 +118,19 @@ Behavior that matters:
   clipboard (`DataPackage.SetStorageItems`), Show in folder runs `explorer.exe /select,"<path>"`,
   drag the movie out. Hides after 8 s unless hovered.
 - The done sound plays after the file is closed, so Rec's own sound is never in a recording.
+
+The encoder, as it worked first try:
+
+- `new MediaStreamSource(new VideoStreamDescriptor(VideoEncodingProperties.CreateUncompressed(MediaEncodingSubtypes.Bgra8, w, h)))`
+  with `BufferTime = TimeSpan.Zero`, and `Starting` calling `SetActualStartPosition(TimeSpan.Zero)`.
+- `MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD1080p)`, then set `Video.Width`, `Height`,
+  `Bitrate`, and `FrameRate`, and `profile.Audio = null` while the source has no audio stream.
+- `SampleRequested` blocks its Media Foundation thread on a `BlockingCollection` until a frame comes.
+  After stop, `CompleteAdding` makes it return `Sample = null`, which ends the transcode.
+- `MediaStreamSample.CreateFromDirect3D11Surface(ownTexture.Surface, time)`, and free the texture in
+  `sample.Processed`.
+- Prepare takes about 0.3 s after `StartCapture`; the movie starts at the first frame, so the file
+  is that much longer than a clock started after prepare.
 
 The frame loop, with the pause offset and the one call that keeps the pool alive:
 
@@ -148,7 +172,10 @@ Status: todo
 As the user, I press Record screen, see 3, 2, 1, and recording starts.
 Screens: countdown
 Acceptance:
-- [self] The MP4 has the display's pixel size, even, scaled down only past the codec limit, on a 100% and a 150% display.
+- [unit] `OutputSize` keeps the pixel size, even, and scales down only past the codec limit.
+- [self] The capture item for the display under the pointer has that display's pixel size. No session starts: a self-test never records the person's screen.
+- [self] Cancel during the countdown records nothing and leaves no file.
+- [manual] A real screen recording has the display's pixel size, on a 100% and a 150% display.
 - [manual] Escape cancels the countdown, and the app being recorded never gets the Escape.
 Status: todo
 
@@ -157,8 +184,10 @@ As the user, I click Stop on the capsule or press the shortcut again, and the mo
 Screens: control
 Depends: S-002
 Acceptance:
-- [snap] The capsule shows a pulsing red dot, the time, Pause, and a red Stop button.
-- [self] The file plays in Media Player and has no capsule, countdown, outline, or card in it.
+- [snap] The capsule shows a pulsing red dot, the time, and a red Stop button (Pause joins it with S-009). Snapshot mode sets `WDA_NONE` first: an excluded window snapshots black.
+- [self] A window recording of a test window of the app's own, read back with `MediaClip.CreateFromFileAsync`: the MP4 exists, is H.264 at the window's visible size, lasts the recorded time within 30%, and its frames change. The capsule reads back `WDA_EXCLUDEFROMCAPTURE`.
+- [self] A test window that stops changing for 2 s still gives a movie of the right length.
+- [manual] The file plays in Media Player and has no capsule, countdown, outline, or card in it.
 - [unit] A second file with the same name gets ` 2` added.
 Status: todo
 
@@ -174,7 +203,9 @@ Status: todo
 As the user, I press Record window and click a window.
 Screens: picker-window
 Acceptance:
-- [self] The video is the window's visible size in pixels, with no shadow and no invisible border.
+- [self] On a test window of the app's own, the video is the window's visible size in pixels, with no shadow and no invisible border. A decoded frame saved as a PNG shows it edge to edge.
+- [self] A test window that changes on every `CompositionTarget.Rendering` records at 30 fps with no frame dropped. A 33 ms `DispatcherTimer` ticks only about 20 times a second, so it measures the test window, not the recorder.
+- [self] Closing the recorded test window stops and saves.
 - [manual] Covering the window with another one does not cover it in the video.
 Status: todo
 
@@ -207,7 +238,8 @@ Status: todo
 ### S-009 Pause and resume
 As the user, I click Pause, then Resume, and get one movie without the paused part.
 Acceptance:
-- [self] Recording 3 s, pausing 2 s, and recording 3 s gives one MP4 of about 6 s, audio in sync.
+- [self] On a test window, recording 3 s, pausing 2 s, and recording 3 s gives one MP4 of about 6 s.
+- [manual] With audio on, the sound stays in sync after the pause.
 - [manual] The time stops and the dot turns gray while paused.
 Status: todo
 
@@ -224,7 +256,7 @@ As the user, I turn on the camera and a round, mirrored bubble shows in my recor
 Screens: bubble
 Acceptance:
 - [manual] Drag moves it; the rim, Ctrl+scroll, or a pinch resizes it; right-click offers Small, Medium, Large, Hide camera.
-- [self] The bubble is in screen and area videos; with camera access off it records without it and says so.
+- [manual] The bubble is in screen and area videos; with camera access off it records without it and says so. A self-test never turns on the camera or the mic, and never records system audio.
 Status: todo
 
 ### S-012 Choose video settings
@@ -257,7 +289,16 @@ Status: todo
 - Guard Windows 11 properties. `IsBorderRequired` is missing on Windows 10 19041 and
   `MinUpdateInterval` before Windows 11 24H2. Check `ApiInformation.IsPropertyPresent` first.
 - The docs tie `GraphicsCaptureAccessKind.Borderless` to a package capability, and Rec is
-  unpackaged. Check the returned status. When it is not `Allowed`, record with the border and say so.
+  unpackaged. Read the state for Settings with
+  `AppCapability.Create("graphicsCaptureWithoutBorder").CheckAccess()`, which never prompts (it
+  returned `Allowed` unpackaged on Windows 11 26200). Call `RequestAccessAsync` only on a real
+  recording, never in a test run. Check the returned status. When it is not `Allowed`, record with
+  the border and say so.
+- The device that captures must stay alive for the recording. Keep the `ID3D11Device` and its
+  immediate context to copy frames, and call `ID3D10Multithread.SetMultithreadProtected(TRUE)` on
+  the device, because Media Foundation reads the textures from its own threads.
+- `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` also blanks `PrintWindow(PW_RENDERFULLCONTENT)`,
+  so the capsule snapshot is a black rectangle. Snapshot mode sets `WDA_NONE` before it captures.
 - H.264 encoders top out near 4096 x 2304, so a 5K display at full size fails to start. HEVC
   keeps 5K and 6K, but on many PCs it needs the HEVC Video Extensions from the Store. Check with
   `CodecQuery` before offering it, and fall back to H.264 with a scaled size.
@@ -281,6 +322,12 @@ Status: todo
   the whole movie while the user waits.
 - Round the bubble with `SetWindowRgn(CreateEllipticRgn(...))` and redo it when its size or DPI
   changes. Start the camera off the UI thread: `MediaCapture.InitializeAsync` can take a second.
+- WinUI 3 `TextBlock` has no `FontFeatures`. For tabular digits in the capsule time, set
+  `Typography.NumeralAlignment="Tabular"` in XAML (the enum is `Microsoft.UI.Xaml.FontNumeralAlignment`).
+- Build the capsule in XAML with `{ThemeResource}`. A brush read in code from
+  `Application.Current.Resources` stays the app theme's brush, so the Stop button keeps its light
+  red in dark mode. A red button also needs its pointer-over and pressed brushes overridden in
+  `Button.Resources` theme dictionaries, or it turns gray on hover.
 - Windows on another display scale get the wrong size if you place them in epx from one display.
   Place the capsule, outline, and bubble with physical pixels from the target display's
   `DisplayArea`. See [move a window](../skills/code/os-integrations/recipes.md#move-a-window).

@@ -1,7 +1,8 @@
-<Project>
+﻿<Project>
   <PropertyGroup>
-    <!-- Build products live outside the repo (and outside OneDrive, which would try to sync them). -->
-    <ArtifactsPath>$(LOCALAPPDATA)\Dev\__APP_NAME__\artifacts</ArtifactsPath>
+    <!-- Build products live outside the repo (and outside OneDrive, which would try to sync them).
+         One folder per checkout, named after it, so agents in separate git worktrees never share build output. -->
+    <ArtifactsPath>$(LOCALAPPDATA)\Dev\__APP_NAME__\$([System.IO.Path]::GetFileName($(MSBuildThisFileDirectory.TrimEnd('\'))))</ArtifactsPath>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

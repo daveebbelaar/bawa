@@ -57,13 +57,13 @@ black on light. The flyout is Acrylic with soft cards and small graphs.
 | Disk | `DriveInfo` for the system drive (`GetDiskFreeSpaceEx`) | None |
 | Battery | `GetSystemPowerStatus`, then `Windows.Devices.Power.Battery.AggregateBattery.GetReport()` | None |
 | Cycle count | `IOCTL_BATTERY_QUERY_INFORMATION` with `BatteryInformation`, device from `SetupDiGetClassDevs(GUID_DEVCLASS_BATTERY)` | None |
-| Tray icons | `Shell_NotifyIcon`, one per metric, `NOTIFYICON_VERSION_4`, `NIF_SHOWTIP` ([recipe](../skills/code/os-integrations/recipes.md#tray-icon)) | None |
+| Tray icons | `Shell_NotifyIcon`, one per metric on the app's own hidden window, each with its own uID and no GUID, `NOTIFYICON_VERSION_4`, `NIF_SHOWTIP` ([recipe](../skills/code/os-integrations/recipes.md#tray-icon)) | None |
 | Icon per sample | 32-bit `CreateDIBSection`, `CreateIconIndirect`, `NIM_MODIFY`, then `DestroyIcon` on the old one | None |
 | Flyout | WinUI `Window`, `SetBorderAndTitleBar(false, false)`, `DesktopAcrylicBackdrop`, placed with `Shell_NotifyIconGetRect` ([recipe](../skills/code/os-integrations/recipes.md#move-a-window)) | None |
 | Mini bar | WinUI `Window`, topmost, `WS_EX_TOOLWINDOW` and `WS_EX_NOACTIVATE` ([recipe](../skills/code/os-integrations/recipes.md#non-activating-panel)) | None |
-| Timer | `PeriodicTimer` on a background task, results through `DispatcherQueue.TryEnqueue` | None |
+| Timer | A dedicated sampler `Thread` that waits on the cancellation token's `WaitHandle`, results through `DispatcherQueue.TryEnqueue` | None |
 | Pause while away | `RegisterPowerSettingNotification(GUID_CONSOLE_DISPLAY_STATE)`, `WTSRegisterSessionNotification` | None |
-| Low power | `SetProcessInformation(ProcessPowerThrottling)` with `PROCESS_POWER_THROTTLING_EXECUTION_SPEED` (EcoQoS) | None |
+| Low power | `SetThreadInformation(ThreadPowerThrottling)` with `THREAD_POWER_THROTTLING_EXECUTION_SPEED` (EcoQoS) on the sampler thread only | None |
 | Launch at login | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` ([recipe](../skills/code/os-integrations/recipes.md#launch-at-login)) | None |
 | One copy running | `AppInstance.FindOrRegisterForKey` ([recipe](../skills/code/os-integrations/recipes.md#single-instance)) | None |
 
@@ -72,17 +72,20 @@ the `performance` skill, "Timers, polling, and energy".
 
 Types to create:
 - `StatsSample`: one reading as a record in `Stats.Core`, plus `MemoryFraction` and `CommitFraction`.
-- `StatsReader`: owns the PDH query, the last network byte counts, and the CPU fallback ticks. Touched only on the sampler task.
-- `StatsSampler`: `ObservableObject` on the UI thread. Owns the timer task, `Latest`, `History` (60), and a set of demand keys.
+- `StatsReader`: owns the PDH query, the last network byte counts, and the CPU fallback ticks. Touched only on the sampler thread.
+- `StatsSampler`: `ObservableObject` on the UI thread. Owns the sampler thread, `Latest`, `History` (60), and a set of demand keys.
 - `StatsFormat` (`Stats.Core`): every number-to-text rule in one place.
-- `TrayIcons` and `IconPainter`: one `Shell_NotifyIcon` per metric and one `HICON` per sample.
+- `SamplerGate` (`Stats.Core`): the demand keys, display off, and session lock in, running or stopped out. Unit tested.
+- `TrayIcons` and `IconPainter`: one `Shell_NotifyIcon` per metric and one `HICON` per sample. `TrayIcons` takes a `live` flag: in test runs it draws and replaces the icons but never calls `Shell_NotifyIcon` (see Gotchas).
 - `StatsFlyout` with `CpuCard`, `MemoryCard`, `DiskCard`, `NetworkCard`, `BatteryCard`.
 - `MiniBar`: the text strip above the taskbar.
 - `SettingsPage`: metric toggles with a live preview, interval, mini bar, battery details, launch at login.
 
 Behaviors that matter:
-- **Interval** 1, 2, or 5 seconds, default 2. One timer reads everything. The process runs with
-  EcoQoS, so Windows can schedule the reads on efficiency cores.
+- **Interval** 1, 2, or 5 seconds, default 2. One sampler thread reads everything. That thread
+  runs with EcoQoS, so Windows can schedule the reads on efficiency cores, while the flyout and
+  Settings on the UI thread stay at full speed. The one thread also keeps the PDH query on one
+  thread. One read takes about 10 ms, so the 2 s interval costs about 0.5% of one core.
 - **Baseline.** CPU and network need two readings. The first read only stores counters and is
   never published. The first sample comes 0.5 s after start, not a full interval.
 - **Slow values.** Battery every 10 s, disk every 60 s. Carry the last value into the samples in between.
@@ -101,7 +104,8 @@ Behaviors that matter:
 - **Units.** Memory and disk use 1024-based units with KB, MB, and GB labels, like Task Manager
   and File Explorer. Rates are bytes per second, 1024-based: `KB/s`, `MB/s`. Compact rates are at
   most four characters: `0K`, `90K`, `999K`, `1.2M`, `12M`, `1.2G`.
-- **Tray icons.** One icon per metric, each with its own GUID. CPU and Memory draw the percent as
+- **Tray icons.** One icon per metric on the app's own hidden window, each with its own uID
+  (1 for the app icon, 101 and up for the metrics), no GUID. CPU and Memory draw the percent as
   one or two bold digits filling the icon, with 99 as the top value (the tooltip says 100%).
   Network draws two bars, down in the accent color and up in the text color, scaled to the peak,
   never below 50 KB/s so background chatter stays flat. Battery draws its percent. Each icon is
@@ -111,7 +115,9 @@ Behaviors that matter:
   up 40 KB/s", "Battery 84%, 3:20 left". Under 128 characters each.
 - **Defaults:** CPU on, Memory on, Network on, Battery off (Windows already has a battery icon),
   mini bar off, CPU graph off. A PC without a battery leaves the battery icon and card out. With
-  every metric off, show the app icon so the flyout stays reachable.
+  every metric off, show the app icon so the flyout stays reachable. Built into a tray app that
+  already has its own icon and flyout, the metric icons start off, and the host's icon keeps the
+  flyout reachable.
 - **Redraw** only when a sample arrives, and only the icons whose text changed. The icons have no
   timer of their own.
 - **Clicks.** Left-click (`NIN_SELECT`) on any icon toggles the flyout. Right-click
@@ -131,24 +137,26 @@ Behaviors that matter:
 The sampler, with the baseline and the thread it must stay off:
 
 ```csharp
-// English counter names work on every Windows display language. "*" gives every logical processor.
-Pdh.PdhOpenQuery(null, 0, out var query);
-Pdh.PdhAddEnglishCounter(query, @"\Processor Information(_Total)\% Processor Utility", 0, out var cpuTotal);
-Pdh.PdhAddEnglishCounter(query, @"\Processor Information(*)\% Processor Utility", 0, out var cpuCores);
-Pdh.PdhCollectQueryData(query);                     // baseline: rate counters need two collections
-
-_ = Task.Run(async () =>                            // off the UI thread: a collect can take tens of ms
+// One thread of its own: off the UI thread (a collect can take tens of ms), the PDH query on one
+// thread, and EcoQoS for this thread only.
+var thread = new Thread(() =>
 {
-    await Task.Delay(500, token);                   // first sample after 0.5 s, not a full interval
-    using var timer = new PeriodicTimer(TimeSpan.FromSeconds(interval));
-    do
+    try
     {
-        var sample = reader.Read();                 // PdhCollectQueryData, GetIfTable2, GlobalMemoryStatusEx
-        if (!reader.HasBaseline) continue;          // the network bytes need a first reading too
-        dispatcher.TryEnqueue(() => sampler.Publish(sample));
+        UseEcoQoS();                                // SetThreadInformation(GetCurrentThread(), ThreadPowerThrottling, ...)
+        using var reader = new StatsReader();       // PdhOpenQuery, PdhAddEnglishCounter: English names work in every language
+        reader.Read();                              // baseline: rate counters and network bytes need two readings
+        if (token.WaitHandle.WaitOne(500)) return;  // first sample after 0.5 s, not a full interval
+        while (!token.IsCancellationRequested)
+        {
+            if (reader.Read() is { } sample)        // PdhCollectQueryData, GetIfTable2, GlobalMemoryStatusEx
+                dispatcher.TryEnqueue(() => sampler.Publish(sample));
+            if (token.WaitHandle.WaitOne(interval)) return;
+        }
     }
-    while (await timer.WaitForNextTickAsync(token));
-}, token);
+    catch (Exception e) { AgentLog.Line($"CRASH stats sampler: {e}"); }   // or the app ends with no CRASH line
+}) { IsBackground = true, Priority = ThreadPriority.BelowNormal };
+thread.Start();
 ```
 
 ## Stories
@@ -164,7 +172,8 @@ Screens: tray-icons.png
 Acceptance:
 - [snap] The CPU, memory, and network icons render at 16, 20, 24, and 32 px on a light and a dark taskbar.
 - [unit] `StatsFormat.TrayDigits` gives "0", "7", "61", "99" for 0, 7, 61, and 100 percent.
-- [self] After 100 samples, `GetGuiResources(GR_GDIOBJECTS)` is the same as after 10.
+- [self] After 100 samples, `GetGuiResources(GR_GDIOBJECTS)` and `GR_USEROBJECTS` are the same as after 10. The test run paints and replaces the icons without adding them to the notification area.
+- [manual] In the installed build, the icons appear in the notification area.
 Status: todo
 
 ### S-002 Open the flyout
@@ -202,8 +211,9 @@ Screens: settings.png
 Depends: S-001
 Acceptance:
 - [snap] Settings shows the four toggles, a preview of the icons, and "Refresh every" with 1, 2, 5 seconds.
-- [self] Turning a metric off removes its icon within one sample.
-- [self] With all metrics off, the app icon shows and still opens the flyout.
+- [self] Turning a metric off removes its icon within one sample, checked on the tray model's add and remove decisions; the test run never calls `Shell_NotifyIcon`.
+- [self] With all metrics off, the model shows the app icon, and its click opens the flyout.
+- [manual] In the installed build, turning a metric off removes its icon from the notification area.
 Status: todo
 
 ### S-006 Sample only while numbers are visible
@@ -276,14 +286,27 @@ Status: todo
 - **Windows 11 hides new tray icons.** A new icon lands in the overflow behind the `^` until the
   user turns it on in Settings > Personalization > Taskbar > Other system tray icons. An app
   cannot turn it on itself. Say so on first run and open `ms-settings:taskbar`.
-- **A tray icon GUID is tied to the exe path.** Windows remembers the user's "show" choice by
-  GUID, so keep the GUIDs fixed. But a build run from another folder (`./build.ps1 -Dev` from
-  the artifacts path) fails `NIM_ADD` with the same GUID. Use separate GUIDs for dev builds.
+- **Use uIDs, not GUIDs.** A tray icon GUID is tied to the exe path, so a build run from another
+  folder (`./build.ps1 -Dev` from the artifacts path, one Debug build per git worktree) fails
+  `NIM_ADD` with the same GUID. Windows remembers the user's "show" choice by exe path and uID,
+  not by window. Give each icon its own fixed uID on the app's own window: 101 and up for the
+  metrics, so no icon shares the entry of a uID 1 icon from the same exe.
+- **Test runs never add tray icons.** Windows 11 remembers every tray icon it has ever seen: each
+  exe path and uID gets a permanent key under `HKCU\Control Panel\NotifyIconSettings`. A self-test
+  or snapshot run that calls `NIM_ADD` leaves an entry for every dev build folder. In test runs,
+  draw and replace the icons as usual and skip `Shell_NotifyIcon`. The real icons are a manual check.
 - **Explorer restarts drop every icon.** Register `RegisterWindowMessage("TaskbarCreated")` and
   add all icons again when it arrives, or the icons are gone until Stats restarts.
 - **Every sample makes a new HICON.** Call `DestroyIcon` on the old one after `NIM_MODIFY`, and
   `DeleteObject` on the color and mask bitmaps right after `CreateIconIndirect`, which copies them.
   Miss either and the process hits the 10,000 GDI object limit in a few hours, and icons stop drawing.
+- **Drawing the digits.** Draw white text on black into a 32-bit DIB with `ANTIALIASED_QUALITY`,
+  take the gray value as alpha, and tint it. Center by ink, not by the font's cell, or the digits
+  sit high. The icon takes straight alpha (premultiply only for a XAML `WriteableBitmap`). Two bold
+  digits do not fit 16 px in Segoe UI: "Bahnschrift SemiBold Condensed" at an em of 1.4 times the
+  icon size, shrunk until `GetTextExtentPoint32` fits, fills 16 px.
+- **`ICONINFO` with a `bool` field breaks `LibraryImport`** (SYSLIB1051, runtime marshalling must be
+  disabled). Declare `fIcon` as `int`.
 - **Draw at the real icon size.** Ask `GetSystemMetricsForDpi(SM_CXSMICON, dpi)` and draw at
   exactly that size. A 16 px icon on a 150% taskbar is scaled up and the digits blur. Redraw on
   a scale change.
@@ -306,6 +329,16 @@ Status: todo
   Hyper-V add their own rows with the same bytes. Count only rows with
   `InterfaceAndOperStatusFlags.HardwareInterface` set and `FilterInterface` clear, and
   `OperStatus` up. Free the table with `FreeMibTable` after every read, or memory grows each sample.
+- **`MIB_IF_ROW2` has no managed definition.** On x64 and ARM64 a row is 1352 bytes, the rows
+  start at offset 8 of the table, and the fields sit at: `Alias` 28, `InterfaceAndOperStatusFlags`
+  (a byte) 1152, `OperStatus` 1156, `InOctets` 1208, `OutOctets` 1280. A self-test that reads the
+  alias of each counted adapter ("Wi-Fi") proves the offsets.
+- **`PROCESSOR_RELATIONSHIP` offsets.** In `SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX`,
+  `EfficiencyClass` is at 9, `GroupCount` at 30, and the 16-byte `GROUP_AFFINITY` array at 32. On
+  a hybrid CPU a self-test can check one class per logical processor.
+- **The first PDH query in a process is slow,** several hundred ms. A snapshot taken soon after
+  the Settings page opens catches "Reading…", so draw "Reading…" in the preview too, never an
+  empty card. Replace the value, not the whole card, so the card never changes height.
 - **The byte counters are 64 bits but can reset.** Unplugging an adapter starts its count at 0
   again. Treat a negative delta as 0 instead of a huge rate.
 - **Task Manager shows network in bits.** "1.2 Mbps" in Task Manager is about 150 KB/s here.
@@ -328,6 +361,11 @@ Status: todo
   the screen.
 - **Stay off the taskbar itself.** Windows 11 has no deskbands, and windows parented into
   `Shell_TrayWnd` break with Explorer updates. The mini bar sits in the work area, just above it.
+- **Brushes read in code ignore the element's theme.** `Application.Current.Resources["CardBackgroundFillColorDefaultBrush"]`
+  is the app theme's brush, so in a dark snapshot (or with an app theme unlike Windows') the
+  cards stay light. Build colored parts from XAML with `{ThemeResource ...}`, for example one line
+  through `XamlReader.Load`. A snapshot sets the theme after the surface opens: draw again on
+  `ActualThemeChanged`.
 - **Launch at login can be turned off behind your back.** Task Manager's Startup apps writes to
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run` and leaves the
   `Run` value in place. Read both, so the toggle tells the truth.

@@ -54,10 +54,10 @@ No open animation: it must feel instant.
 | --- | --- | --- |
 | Trigger Alt+` and Alt+Shift+` | `RegisterHotKey` with `MOD_ALT \| MOD_NOREPEAT` (plus `MOD_SHIFT`) and the key for scan code 0x29, from `MapVirtualKey(0x29, MAPVK_VSC_TO_VK)` | None |
 | Alt+Tab mode | `SetWindowsHookEx(WH_KEYBOARD_LL)`: Tab with `LLKHF_ALTDOWN` returns 1, so Windows' switcher never sees it | None |
-| Keys while open (Esc, arrows, Enter, the trigger key) | The same hook, which swallows them only while a session is open | None |
+| Keys while open (Esc, arrows, Enter, Tab, the trigger key) | The same hook, which swallows them while a session is open, and the key-up of every key-down it swallowed | None |
 | Notice Alt going up | Key-up of `VK_LMENU` or `VK_RMENU` in the hook, plus a 25 ms poll of `GetAsyncKeyState(VK_MENU)` | None |
-| List windows | `EnumWindows`, `IsWindowVisible`, `IsIconic`, `GetWindowLongPtr(GWL_EXSTYLE)`, `GetWindow(GW_OWNER)`, `DwmGetWindowAttribute` with `DWMWA_CLOAKED` and `DWMWA_EXTENDED_FRAME_BOUNDS` | None |
-| Title, app name, icon | `GetWindowText`, `GetWindowThreadProcessId`, `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)`, `QueryFullProcessImageName`, `FileVersionInfo.FileDescription`, `StorageFile.GetThumbnailAsync(ThumbnailMode.SingleItem, 64)` on the exe | None |
+| List windows | `EnumWindows`, `IsWindowVisible`, `IsIconic`, `GetClassName`, `GetWindowLongPtr(GWL_EXSTYLE)`, `GetWindow(GW_OWNER)`, `DwmGetWindowAttribute` with `DWMWA_CLOAKED` and `DWMWA_EXTENDED_FRAME_BOUNDS` | None |
+| Title, app name, icon | `GetWindowText`, `GetWindowThreadProcessId`, `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)`, `QueryFullProcessImageName`, `FileVersionInfo.FileDescription`, `StorageFile.GetThumbnailAsync(ThumbnailMode.SingleItem, 64)` on the exe, else `SHDefExtractIconW` | None |
 | Previews | `DwmRegisterThumbnail`, `DwmUpdateThumbnailProperties`, `DwmQueryThumbnailSourceSize`, `DwmUnregisterThumbnail` | None |
 | Focus one window | `SetForegroundWindow`, then `Win32.ForceForeground` (the `AttachThreadInput` fallback in `UI/Win32.cs`) | None (UIPI applies, see Gotchas) |
 | Panel | WinUI `Window` with `OverlappedPresenter.SetBorderAndTitleBar(true, false)`, `IsAlwaysOnTop`, `WS_EX_NOACTIVATE \| WS_EX_TOOLWINDOW`, shown with `AppWindow.Show(false)` | None |
@@ -76,6 +76,7 @@ Main types:
 - `WindowInfo` (Core): hwnd, pid, process path, title, style flags, cloaked, visible frame in epx. A plain record, so the filter is testable.
 - `WindowFilter` (Core): the rules below, pure. Unit tested.
 - `SwitcherSession` (Core): items count, selection, columns; `Step`, `StepRow`, wrap. Unit tested.
+- `SwitcherKeyRouter` (Core): the whole hook decision as a pure state machine. It takes one key (virtual key, scan code, down or up, Alt, Shift, Ctrl, Win, injected) and returns swallow or pass plus the command. Unit tested, and the self-test drives it with synthetic keys.
 - `WindowList`: walks `EnumWindows`, builds `WindowInfo`, filters, caches app name and icon per process path.
 - `WindowSwitcher` (`ObservableObject`): Items, Selection, IsActive; `Open`, `Step`, `Commit`, `Cancel`.
 - `SwitcherWindow`: the panel and the tile grid.
@@ -87,16 +88,19 @@ Main types:
 
 Behaviors that matter:
 
-- **Which windows.** Visible, not minimized, `DWMWA_CLOAKED` is 0, no owner (or `WS_EX_APPWINDOW` set), no `WS_EX_TOOLWINDOW`, and a visible frame of at least 60 by 60 epx (frame from `DWMWA_EXTENDED_FRAME_BOUNDS`, divided by the window's DPI scale). Keep the `EnumWindows` order: it is front to back. An empty title falls back to the app name. Switch's own Settings window counts; its panel is a tool window, so it never does.
+- **Which windows.** Visible, not minimized, `DWMWA_CLOAKED` is 0, no owner (or `WS_EX_APPWINDOW` set), no `WS_EX_TOOLWINDOW`, no `WS_EX_NOACTIVATE` unless `WS_EX_APPWINDOW` is set (overlays; Windows' own Alt+Tab skips them too), not one of the shell classes `Progman`, `WorkerW`, `Shell_TrayWnd`, `Shell_SecondaryTrayWnd`, and a visible frame of at least 60 by 60 epx (frame from `DWMWA_EXTENDED_FRAME_BOUNDS`, divided by the window's DPI scale). Keep the `EnumWindows` order: it is front to back. An empty title falls back to the app name. Switch's own Settings window counts; its panel is a tool window, so it never does.
 - **App name.** `FileDescription` of the exe, else the file name without `.exe`. A window owned by `ApplicationFrameHost.exe` is a packaged app: use the process of its child window from another process.
+- **Trigger match.** In the hook, compare `KBDLLHOOKSTRUCT.scanCode == 0x29`; no `MapVirtualKey` is needed there. The trigger needs Alt down and neither Ctrl nor Win. AltGr is Ctrl+Alt, and on layouts where AltGr plus the key above Tab types a character, a trigger without that rule eats the character. Built into an app with one shared keyboard hook, the trigger goes through that hook by this rule, with no `RegisterHotKey`.
 - **First press.** Open and select index 1 (the window behind the current one). Alt+Shift+` opens on the last item. Later presses add or subtract one and wrap around.
 - **Quick tap.** If Alt is already up when the list is built, select index 1 and switch at once. No panel.
 - **Show delay.** Show the panel 90 ms after opening, and only if the session is still active. A fast Alt+` never flashes the panel.
 - **Menu mask.** When a session opens, send one press of the unassigned key `0xE8` with `SendInput`, marked in `dwExtraInfo`. Then the Alt release does not open the menu bar of the window behind.
 - **Let go.** The hook sees the Alt key-up and commits. A 25 ms `DispatcherQueueTimer` on the UI thread reads `GetAsyncKeyState(VK_MENU)` too, in case the hook missed it.
-- **Keys while open.** The hook swallows these, and their key-ups, only while a session is open. Esc cancels. Left and Right step by one. Up and Down step by one row (the column count). Enter commits. The trigger key steps. A click on a tile selects and commits.
+- **Keys while open.** The hook swallows these only while a session is open. Esc cancels. Left and Right step by one. Up and Down step by one row (the column count). Enter commits. The trigger key steps. Tab steps too (Shift+Tab steps back): with Alt held for Alt+`, a Tab that passes opens Windows' Alt+Tab on top of the switcher. A click on a tile selects and commits.
+- **Key-ups after the session.** Keep a set of the key-downs the hook swallowed, and swallow their key-ups whatever the session state. Enter commits and closes the session before its key-up comes; passed on, that key-up reaches the app in front as a lone Enter key-up. Alt itself is never swallowed, so Windows never thinks it is stuck.
+- **Open from the menu.** The tray menu row (or a shortcut the person sets) opens a session with no Alt to let go of. Enter or a click switches, Esc cancels, and another window coming to the front cancels, like a click outside a flyout. No quick tap and no commit on an Alt release in this mode.
 - **Grid size.** Use the work area of the monitor under the pointer and that monitor's DPI. Columns = how many 236 epx tiles with 8 epx spacing fit in 90% of the width, minus padding 16 on each side, at least 1, at most the window count. Height stops at 90% of the work area; the grid scrolls.
-- **Previews.** Only when on. Register a DWM thumbnail for each tile that is fully in view, at most 24. Place it in the tile's preview area in physical pixels (epx times `XamlRoot.RasterizationScale`), keep the source's aspect ratio, and set `rcSource` to the visible frame so the invisible borders are cut off. On scroll, place them again; a tile partly out of view hides its thumbnail and shows the large icon. Unregister every thumbnail when the session closes.
+- **Previews.** Only when on. Register a DWM thumbnail for each tile that is fully in view, at most 24. Place it in the tile's preview area in physical pixels of the panel's client area (epx times `XamlRoot.RasterizationScale`), keep the source's aspect ratio, and set `rcSource` to the visible frame relative to the source's `GetWindowRect` (visible frame minus outer rect) so the invisible borders are cut off. On scroll, place them again; a tile partly out of view hides its thumbnail and shows the large icon. Unregister every thumbnail when the session closes.
 - **Focus.** Hide the panel first, then focus the window (snippet below). One of Switch's own windows: `Activate()`.
 - **Alt+Tab mode.** The hook returns 1 for Tab while `LLKHF_ALTDOWN` is set and opens or steps the session. Unregister the Alt+` hotkeys in this mode. Switching back to Alt+` stops the swallowing at once.
 - **Prewarm.** 2 s after launch, build the panel, show it off screen without activation, and hide it. Fill the icon cache. The first Alt+` is then as quick as the rest.
@@ -138,7 +142,8 @@ As the user, I hold Alt and press `, and a panel shows every window on this desk
 Screens: switcher.png
 Acceptance:
 - [snap] Tiles show the app icon and the window title, with the second tile selected.
-- [unit] The window filter drops tool windows, owned windows, cloaked windows, minimized windows, and windows under 60 epx.
+- [unit] The window filter drops tool windows, owned windows, cloaked windows, minimized windows, windows under 60 epx, `WS_EX_NOACTIVATE` windows without `WS_EX_APPWINDOW`, and the classes `Progman`, `WorkerW`, `Shell_TrayWnd`, and `Shell_SecondaryTrayWnd`.
+- [self] Synthetic keys fed through `SwitcherKeyRouter` and the same run path the hook thread posts to open a session on index 1. The window source is narrowed to three test windows of the app's own, Alt state is replaced, and the `0xE8` menu mask is off, since it would go to whatever window is in front.
 - [manual] The panel shows about 90 ms after the press, centered on the monitor under the pointer, and the app in front keeps focus.
 Status: todo
 
@@ -147,6 +152,7 @@ As the user, I press ` again to move forward and Shift+` to move back while hold
 Depends: S-001
 Acceptance:
 - [unit] Stepping past the last item wraps to the first, and back from the first wraps to the last.
+- [unit] While a session is open, Tab is swallowed and steps. Ctrl+Alt+` (AltGr) passes and opens nothing.
 - [snap] The accent border sits on the selected tile.
 Status: todo
 
@@ -154,6 +160,8 @@ Status: todo
 As the user, I let go of Alt and the selected window comes to the front with keyboard focus.
 Depends: S-001
 Acceptance:
+- [unit] Enter commits and closes the session; its key-up, which comes after, is still swallowed.
+- [self] Letting go of Alt with the second test window selected focuses it. Read the front window right after the switch, not after a delay: parallel test runs share one foreground.
 - [manual] Picking the second of two File Explorer windows focuses that window.
 - [manual] Typing right after the switch goes into the new window.
 - [manual] A quick tap of Alt+` lands in the window I used before and never shows the panel.
@@ -164,7 +172,7 @@ Status: todo
 As the user, I press Esc while holding Alt and the panel closes without switching.
 Depends: S-001
 Acceptance:
-- [self] After cancel, the hook swallows no keys and no thumbnail is registered.
+- [self] After cancel, the hook swallows no new key-down (only the pending Esc key-up) and no thumbnail is registered.
 Status: todo
 
 ### S-005 See when the trigger cannot work
@@ -180,6 +188,7 @@ Status: todo
 As the user, I right-click the Switch icon to see the trigger, open Settings, or quit.
 Acceptance:
 - [unit] The menu model has "Switch windows: Alt+`", a warning row when the trigger is taken, Settings, and Quit.
+- [self] "Switch windows" from the menu opens a session with no Alt held; Enter switches, Esc cancels, and another window coming to the front cancels.
 - [manual] No taskbar button while only the tray icon runs; closing Settings keeps the app running.
 Status: todo
 
@@ -190,6 +199,7 @@ As the user, I see a live picture of each window in its tile.
 Depends: S-001
 Screens: switcher-previews.png
 Acceptance:
+- [snap] With previews on, the test windows' tiles show their pictures: `PrintWindow(PW_RENDERFULLCONTENT)` captures DWM thumbnails.
 - [manual] Tiles show the windows at once, and a playing video moves inside its tile.
 - [self] A session with 30 windows registers at most 24 thumbnails and none after it closes.
 Status: todo
@@ -239,7 +249,8 @@ Status: todo
 - A hook delegate that the garbage collector frees crashes the app on the next key. Use an `[UnmanagedCallersOnly]` static method and a function pointer, or keep the delegate in a static field.
 - While an app running as administrator is in front, a normal app's hook gets no keys (UIPI). Alt+Tab mode and the session keys stop there. Say so in Settings; running Switch elevated is not the default.
 - A lone Alt press and release opens the menu bar of the app in front. The switcher eats the key between them, so mask the press with a `SendInput` of key `0xE8`, the same trick AutoHotkey uses.
-- `VK_OEM_3` is ` only on US layouts. Register the key for scan code 0x29 (the key above Tab) through `MapVirtualKey`, and show its real label from `GetKeyNameText`.
+- `VK_OEM_3` is ` only on US layouts. Register the key for scan code 0x29 (the key above Tab) through `MapVirtualKey`, and compare the scan code in the hook. Show its real label from `MapVirtualKey(MapVirtualKey(0x29, MAPVK_VSC_TO_VK), MAPVK_VK_TO_CHAR)`.
+- The desktop (`Progman`, titled "Program Manager") is visible, unowned, not a tool window, not cloaked, and full screen. Without the shell class list, the desktop gets a tile.
 - Take Alt+Tab in the hook, by returning 1 for Tab while `LLKHF_ALTDOWN` is set. Nothing persists: when Switch quits or crashes, the hook is gone and Windows' Alt+Tab works again. No restore step at quit is needed.
 - Windows on other virtual desktops and suspended packaged apps report `IsWindowVisible` true. Check `DWMWA_CLOAKED`, or the panel fills with windows you cannot see.
 - `GetWindowRect` includes the invisible resize borders of Windows 10 and 11. Use `DWMWA_EXTENDED_FRAME_BOUNDS` for the 60 epx check and for the preview's source rect.
@@ -248,6 +259,8 @@ Status: todo
 - On a PC with two monitors at different scales, the hidden panel still has the DPI of the last monitor. Size it with `GetDpiForMonitor` for the monitor under the pointer before showing it.
 - A click on a `WS_EX_NOACTIVATE` window must still not activate it. Return `MA_NOACTIVATE` for `WM_MOUSEACTIVATE` in the panel's window subclass, so the window you leave keeps focus until the switch.
 - App icons come from the exe through an async thumbnail call. Cache them per process path and clear the cache past 150 entries.
+- `StorageFile.GetThumbnailAsync` throws `COMException` for `C:\Windows\explorer.exe` and `System32\cmd.exe` on Windows 11. Fall back to `SHDefExtractIconW`, then copy the HICON's color bitmap (`GetIconInfo`, `GetDIBits`) into a premultiplied `WriteableBitmap`.
+- A brush read in code from `Application.Current.Resources` is the app theme's brush and ignores the element's `RequestedTheme`, so a tile built in code keeps light colors in the dark snapshot. Build the tile as a XAML `UserControl` with `{ThemeResource}`.
 - The first open after launch builds the XAML tree of the panel and is slow. Prewarm it 2 s after launch.
 - A second copy of Switch fails `RegisterHotKey` with `ERROR_HOTKEY_ALREADY_REGISTERED` and shows a false "Another app uses Alt+`" warning. Make the app single instance and send the second launch to the first copy's Settings.
 - Explorer restarts drop the tray icon. Re-add it when the `TaskbarCreated` message arrives. A message-only window never gets that broadcast, so use a hidden normal window.

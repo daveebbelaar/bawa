@@ -224,5 +224,6 @@ Status: todo
 - `RegisterHotKey` with a null window handle also succeeds, and then `WM_HOTKEY` goes to the thread queue where WinUI never shows it to you: every shortcut is dead with no error. Register on the hidden tray window, and have the self-test check the handle and post a `WM_HOTKEY` to it.
 - An agent cannot prove a real key press from its sandboxed shell: injected keys may never reach the hotkey system. The self-test posts `WM_HOTKEY` to the tray window instead, aimed at its own test window, and the physical key press stays a `[manual]` line.
 - Some apps (terminals, Steam) snap their size to a character grid or a minimum. After the retry, check the size and pin the window to the edge it was sent to.
+- Name the code `Snap`, never `Windows`. Built as one feature of a larger app, a folder and namespace like `MyApp.Features.Windows` shadows the WinRT `Windows.*` root in every sibling `MyApp.Features.*` namespace: `Windows.Foundation.Point` fails with CS0234 in every other feature, and each one needs `global::Windows...`.
 
 Done when every default shortcut snaps the foreground window of any normal app to the right frame on each connected display, a failed shortcut shows in Settings, Settings changes every shortcut, the wide width, and the gap, and Snap keeps running in the tray after Settings closes.

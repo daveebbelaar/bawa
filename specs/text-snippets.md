@@ -21,6 +21,7 @@ PhraseExpress and AutoHotkey hotstrings, and typing the same lines over and over
 
 ## Data
 - Snippet: id, keyword, expansion, enabled. Snippets.db (SQLite) in %LOCALAPPDATA%\Snippets
+  (a JSON file, written to a temp file and then renamed, is fine for a list under a few hundred items)
 
 ## Shape
 Tray icon plus a Settings window that holds the snippet list. No panel.
@@ -68,7 +69,9 @@ Types to create:
 
 - `Snippet` (Core; `IsReady` means a keyword of 2 or more characters and some text) and `SnippetStore` (Core, SQLite, saved on every change, three starters on first run).
 - `SnippetMatcher` (Core): pure buffer logic; feed it characters and reset keys, it returns a match. Unit tested.
-- `SnippetEngine`: owns the matcher, the pending expansion, and `Expand`.
+- `SnippetTyping` (Core): the matcher plus the pending match and its extra characters. Each key returns none, matched, matched but maybe longer, or cancelled. Unit tested.
+- `SnippetEngine`: owns `SnippetTyping`, the wait before an expansion, and `Expand`. It sends nothing unless the window the keyword was typed in is still in front.
+- `ISnippetPaster`: the paste path behind an interface, so the self-test swaps in a fake and never touches the clipboard.
 - `KeyboardHook`: installs both hooks on a dedicated thread, skips the app's own events, reinstalls when Windows drops them.
 - `SyntheticInput` (`Press`, `Type`, `Paste`, all marked) and `ClipboardSnapshot` (`Take`, `Restore`, `PasteTransient`).
 - `Placeholders` (Core): pure `Resolve(text, now, clipboard)`. Unit tested.
@@ -81,10 +84,10 @@ Exact behavior:
 - Backspace removes the last buffer character. Ctrl or Win held resets the buffer, except AltGr (Right Alt, which Windows reports as Ctrl plus Alt), which types characters like @ on German layouts.
 - Track Shift, Ctrl, Alt, Win, and Caps Lock from the hook's own events, and pass that state to `ToUnicodeEx`.
 - Reset on: Enter, Tab, Esc, arrows, Home, End, Page Up, Page Down, Delete, any mouse button down, and a foreground window change.
-- Match: of the enabled, ready snippets, the longest keyword that the buffer ends with wins, so `;dates` beats `;date`.
+- Match: of the enabled, ready snippets, the keyword that the buffer ends with. The buffer is checked on every character, so ";date" matches before the "s" of ";dates" arrives. A match that is the start of a longer ready keyword waits for the next key, up to 600 ms: a character that completes the longer keyword makes it the match, any other character becomes extra, and with no key the shorter one expands. That is how `;dates` beats `;date`.
 - On a match: clear the buffer, store it as pending, and expand 20 ms later on the UI thread, never inside the hook. The hook runs before the app gets the key, so the last typed character needs that time to land.
-- While pending: collect typed characters as "extra". Backspace removes the last extra (or cancels when none). Ctrl, Win, or a reset key cancels.
-- Expand: skip when the foreground app is elevated. Resolve placeholders, cut out `{cursor}` and count the text elements after it (`StringInfo.LengthInTextElements`). Press Backspace `keyword.Length + extra.Length` times.
+- While pending: collect typed characters as "extra". Backspace removes the last extra (or cancels when none). Ctrl, Win, or a reset key cancels. Cancel a waiting expansion with a generation counter: each key or reset bumps it, and the delayed expansion checks it after its wait.
+- Expand: skip when the foreground app is elevated, and when `GetForegroundWindow()` is no longer the window the keyword was typed in. Check that right before every send. Resolve placeholders, cut out `{cursor}` and count the text elements after it (`StringInfo.LengthInTextElements`). Press Backspace once per text element of the keyword plus the extra, not per UTF-16 unit, so an emoji never leaves half a surrogate pair.
 - Text with a newline or over 60 characters: paste it. Shorter text: type it with `KEYEVENTF_UNICODE`, a down and an up per UTF-16 unit, all in one `SendInput` call.
 - After that: type the extra characters again. With no extra and a `{cursor}`, press Left that many times, 50 ms later.
 - Paste path: snapshot every clipboard format that holds an `HGLOBAL`, write the text as `CF_UNICODETEXT` plus the app's own format, `ExcludeClipboardContentFromMonitorProcessing`, and `CanIncludeInClipboardHistory` set to 0. Send Ctrl+V. Restore the snapshot 350 ms later, with the same marks.
@@ -132,7 +135,8 @@ Acceptance:
 - [unit] SnippetMatcher fed ";shrug" returns the shrug snippet; fed ";shru" returns null.
 - [unit] Backspace removes the last buffer character; Enter, Tab, arrows, and Ctrl combos reset it; AltGr characters do not.
 - [manual] The keyword is gone and the text is in its place, in Notepad, Word, and Edge.
-- [unit] With ;date and ;dates set, ";dates" picks ;dates; snippets that are off or not ready never match.
+- [unit] With ;date and ;dates set, typing ;dates expands ;dates, and typing ;date then a space expands ;date with the space as extra; snippets that are off or not ready never match.
+- [self] Key events fed to the engine the way the hook delivers them (`VkKeyScanExW` on the test window's layout) turn ;shrug into ¯\_(ツ)_/¯ in a test window of the app's own; the engine's real `SendInput` output lands in its text box. The app's other windows never expand. Driving the hook with `SendInput` does not work: those keys are injected.
 - [manual] The app's own typed text never triggers another expansion.
 Status: todo
 
@@ -140,6 +144,8 @@ Status: todo
 As the user, I type ;shrug and keep typing fast; nothing I typed is lost.
 Depends: S-002
 Acceptance:
+- [unit] Characters typed while a match waits become extra; Backspace takes back the last one; an arrow cancels.
+- [self] ";shrug ok" fed quickly into the test window gives "¯\_(ツ)_/¯ ok".
 - [manual] Typing ";shrug ok" quickly gives "¯\_(ツ)_/¯ ok".
 - [manual] Pressing an arrow key right after the keyword cancels the expansion.
 Status: todo
@@ -148,6 +154,8 @@ Status: todo
 As the user, a three-line signature expands at once and my clipboard is unchanged after.
 Depends: S-002
 Acceptance:
+- [unit] Text with a newline or over 60 characters takes the paste path; shorter text is typed.
+- [self] A three-line snippet in the test window goes to a fake `ISnippetPaster`; the clipboard is never written or read.
 - [manual] Text with a newline or over 60 characters arrives in one paste.
 - [manual] An image on the clipboard before the expansion is still there 1 s after.
 - [manual] Win+V history and Ditto do not save the expansion.
@@ -224,7 +232,7 @@ Status: todo
 - A hook on the UI thread waits for the UI. Any slow layout or open dialog then delays every keystroke on the PC, and gets the hook removed. Keep it on the dedicated thread.
 - A hook delegate that the garbage collector frees crashes the app on the next key. Use an `[UnmanagedCallersOnly]` static method and a function pointer, or keep the delegate in a static field.
 - The hook runs before the app gets the key, so expanding inside it deleted the wrong characters. Wait 20 ms on the UI thread, count characters typed in that window into the Backspace presses, and type them again after the text.
-- `GetAsyncKeyState` inside the callback reads the state from before this key, and `GetKeyboardState` reads your own thread's state. Track the modifiers yourself from the hook's events.
+- `GetAsyncKeyState` inside the callback reads the state from before this key, and `GetKeyboardState` reads your own thread's state. Track the modifiers yourself from the hook's events, and build the state array for `ToUnicodeEx` from them. AltGr needs both Ctrl and Alt set in that array, or `@` on a German layout comes out as `q`.
 - `ToUnicodeEx` changes the kernel's dead-key state by default, so é typed as ´ then e came out as two characters in the target app. Pass flag 0x4 (Windows 10 1607 and later) so it leaves the state alone. Use the layout of the foreground window's thread, not your own.
 - AltGr arrives as Ctrl plus Alt. Treating it as a Ctrl combo reset the buffer on every @ typed on a German keyboard.
 - A one-letter keyword or empty text eats characters while you type. Only snippets with a keyword of 2 or more characters and some text fire. Tell users to start keywords with `;`.
@@ -232,12 +240,15 @@ Status: todo
 - One `SendInput` call is never interleaved with other input, so send the whole short text in one call. Keep both halves of a surrogate pair in it, or emoji break.
 - `KEYEVENTF_UNICODE` for a line break gives different results per app. Text with `\n` or over 60 characters goes through the clipboard and Ctrl+V.
 - `SendInput` with an `INPUT` struct that holds only `KEYBDINPUT` sends nothing and returns 0. Declare the full union, so `Marshal.SizeOf<INPUT>()` is 40 on 64-bit Windows.
+- `[LibraryImport]` with a `char` parameter does not build (SYSLIB1051, runtime marshalling must be disabled). Declare `VkKeyScanExW` with a `ushort`.
+- `SetClipboardData` fails after `OpenClipboard(0)` plus `EmptyClipboard`. Open the clipboard with an owner window: a message-only window is enough.
 - Snapshot every clipboard format that holds an `HGLOBAL`, not only the text, or an image the user had copied is gone after an expansion. Skip `CF_BITMAP`, `CF_PALETTE`, `CF_METAFILEPICT`, and `CF_ENHMETAFILE`: they are GDI handles, and Windows makes `CF_BITMAP` again from `CF_DIB`. Restore 350 ms after the paste.
 - While an app running as administrator is in front, the hook sees no keys and `SendInput` into it is blocked by UIPI without an error. Expansion simply does not happen there. Say so in Settings.
 - Two running copies means two hooks, and every keyword expands twice. Make the app single instance and send the second launch to the first copy's Settings.
 - The buffer holds what the user types, passwords included. Never write it to `AgentLog` or a file; log lengths and snippet ids only.
 - `{date:PATTERN}` uses .NET custom date formats, not the Unicode patterns of macOS: the weekday is `dddd`, not `EEEE`. `d MMMM` works the same in both.
 - Closing the Settings window must not end the app. Cancel `AppWindow.Closing` and call `AppWindow.Hide()`; the tray icon keeps running.
+- A WinUI `TextBox` drops every line but the first when `Text` is set while `AcceptsReturn` is still false. An object initializer sets properties in order, so `new TextBox { Text = "a\nb", AcceptsReturn = true }` shows "a", and saving deletes the rest of the snippet. Set `AcceptsReturn` first, set `Text` after the initializer, and convert `\n` to `\r` going in.
 - Changed from BAMA: the 20-unit chunks are gone, since `SendInput` has no such limit and one call is not interleaved. The cursor count uses text elements, so an emoji or `\r\n` after `{cursor}` is one Left press. There is no permission to grant, so the Accessibility story became "Start expanding at once".
 
 Done when typing `;shrug` in Notepad gives `¯\_(ツ)_/¯`, `;date` gives today's date, a three-line snippet pastes and the old clipboard comes back, and snippets survive a restart.

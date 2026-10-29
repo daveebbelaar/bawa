@@ -108,6 +108,12 @@ feature needs package identity (a share target, a startup task, Explorer
 context menus, the Windows AI APIs), add a sparse package instead of
 switching: the `distribute` skill shows how.
 
+## Several specs as one app
+
+Building a suite (a tray app made of features, like PowerToys) from
+several specs? Read [suite.md](suite.md) first: build the shell, then one
+agent per feature in its own git worktree, then merge.
+
 ## A CLI for agents
 
 To let Claude Code, Codex, or scripts read and change the app's data, call

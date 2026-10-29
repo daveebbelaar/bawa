@@ -1,4 +1,4 @@
----
+﻿---
 name: build-and-verify
 description: Build a WinUI 3 app from the command line, install it, and check light and dark window snapshots of every page before calling a change done. Use after any UI code change, when a build fails, or when the user asks to run, screenshot, or check the app.
 allowed-tools: PowerShell(./build.ps1*) PowerShell(tools/*) PowerShell(dotnet *) Bash(dotnet *) Read
@@ -37,9 +37,9 @@ because Windows locks the files of a running app.
 
 ```powershell
 tools/snap.ps1
-# SNAPSHOT C:\Users\<you>\AppData\Local\Temp\<AppName>-shots\all-light.png
+# SNAPSHOT C:\Users\<you>\AppData\Local\Temp\<AppName>-shots-<checkout>\all-light.png
 # ...
-# SNAPSHOT done C:\Users\<you>\AppData\Local\Temp\<AppName>-shots
+# SNAPSHOT done C:\Users\<you>\AppData\Local\Temp\<AppName>-shots-<checkout>
 ```
 
 The app opens on a fresh test store with sample data (`APP_SEED=1`),
@@ -67,6 +67,17 @@ with `DWMWA_EXTENDED_FRAME_BOUNDS`. No permission is needed. Before each
 capture it brings the window to the front, so the title bar is active and
 Mica is full strength. Never take full-screen captures to check your app:
 they show the user's other windows.
+
+### Windows that hide from captures
+
+A window with `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` (a
+recording capsule, a toast that must stay out of a video) comes out solid
+black in `PrintWindow` too. In snapshot mode, set it to `WDA_NONE` before
+the capture and back after.
+
+A page taller than the window shows only its first screen. Add a
+snapshot surface for the lower part (scroll the page first) when it
+matters.
 
 ### Seed data
 

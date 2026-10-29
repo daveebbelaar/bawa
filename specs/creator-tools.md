@@ -55,10 +55,10 @@ capsules; the teleprompter is a dark plate so white text reads on any wallpaper.
 | Part | API | Permission |
 | --- | --- | --- |
 | Keystroke overlay | `SetWindowsHookEx(WH_KEYBOARD_LL)` on a dedicated thread with its own message loop | None. Sees no input aimed at elevated windows (UIPI) |
-| Hide password keys | Skip `LLKHF_INJECTED` events; in "All keys" mode, UI Automation `IUIAutomation.GetFocusedElement` and `CurrentIsPassword`, refreshed on `SetWinEventHook(EVENT_OBJECT_FOCUS)` | None |
-| Key names and typed text | `GetKeyNameText` for caps, `ToUnicodeEx` with flag bit 2 so the keyboard state is not changed | None |
-| Cursor halo and click ripple | `SetWindowsHookEx(WH_MOUSE_LL)` on the same thread | None. Same UIPI limit |
-| Overlay windows | Plain Win32 windows: `WS_POPUP`, `WS_EX_LAYERED \| WS_EX_TRANSPARENT \| WS_EX_TOPMOST \| WS_EX_TOOLWINDOW \| WS_EX_NOACTIVATE`, drawn with `UpdateLayeredWindow` from a 32-bit premultiplied DIB | None |
+| Hide password keys | Skip `LLKHF_INJECTED` events; in "All keys" mode, UI Automation `IUIAutomation::GetFocusedElement` and `IUIAutomationElement::GetCurrentPropertyValue(UIA_IsPasswordPropertyId)`, refreshed on `SetWinEventHook(EVENT_OBJECT_FOCUS)`, on a pool thread | None |
+| Key names and typed text | `MapVirtualKeyEx(vk, MAPVK_VK_TO_CHAR, layout of the foreground thread)` for letters, digits, and punctuation; a fixed name table for the rest; `ToUnicodeEx` with flag bit 2 so the keyboard state is not changed | None |
+| Cursor halo and click ripple | `SetWindowsHookEx(WH_MOUSE_LL)` on the same thread, which also owns the halo and ripple windows | None. Same UIPI limit |
+| Overlay windows | Plain Win32 windows: `WS_POPUP`, `WS_EX_LAYERED \| WS_EX_TRANSPARENT \| WS_EX_TOPMOST \| WS_EX_TOOLWINDOW \| WS_EX_NOACTIVATE`, drawn with `UpdateLayeredWindow` from a 32-bit premultiplied DIB; text through GDI+ (`System.Drawing.Common`) on that DIB | None |
 | Keep notes out of recordings | `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` (Windows 10 2004 or later) | None |
 | Global shortcuts | `RegisterHotKey` ([recipe](../skills/code/os-integrations/recipes.md#global-hotkey-registerhotkey)) | None |
 | Hide desktop icons | Read `HideIcons` in `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`; toggle with `WM_COMMAND 0x7402` to the desktop's `SHELLDLL_DefView` | None |
@@ -71,9 +71,10 @@ Nothing here needs a permission prompt or elevation. The trade-off is UIPI: whil
 Recipes: [tray icon](../skills/code/os-integrations/recipes.md#tray-icon), [low-level keyboard hook](../skills/code/os-integrations/recipes.md#low-level-keyboard-hook), [non-activating panel](../skills/code/os-integrations/recipes.md#non-activating-panel), [screen capture](../skills/code/os-integrations/recipes.md#screen-capture) (for the test recording check), [single instance](../skills/code/os-integrations/recipes.md#single-instance), [elevation and UIPI](../skills/code/os-integrations/recipes.md#elevation-and-uipi).
 
 Types to create:
-- `InputHooks`: one background thread with a message loop that owns both hooks. The callbacks copy the event into a `Channel` and return at once.
+- `InputHooks`: one background thread with a message loop that owns both hooks. The keyboard callback copies the event into a `Channel` and returns at once.
+- `ModifierState` and `KeystrokeModel` (Core): held modifiers with the AltGr rule, and the entries, counts, and skip rules (injected keys included). Unit tested.
 - `KeystrokeOverlay`: `ObservableObject` entries, mode, the overlay window, fade timing.
-- `CursorHighlight`: the halo window that follows the pointer, a pool of 4 ripple windows, hooks only while on.
+- `CursorHighlight`: the halo window that follows the pointer, a pool of 4 ripple windows, hooks only while on. The hook thread owns these windows: the mouse callback stores the point and posts a thread message to itself, and the loop moves the window.
 - `LayeredWindow`: one Win32 popup with the overlay styles, a DIB section, and `Present(bitmap, x, y)` through `UpdateLayeredWindow`. Every overlay uses it.
 - `RecordingMode`: turn on, turn off, the saved `RecordingSnapshot`, resume at launch.
 - `ChapterClock`: session, markers, the chapter prompt (a small WinUI window), YouTube text, CSV export, issues.
@@ -82,10 +83,11 @@ Types to create:
 
 Behaviors that matter:
 - **Keystroke modes.** "Shortcuts only" (default) shows combos with Ctrl, Alt, or Win, plus Esc, Tab, Enter, keypad Enter, and the arrows. Shift alone does not make a combo. "All keys" shows typed text as one cap that grows, last 24 characters.
-- **Key caps.** Modifiers read as words, in this order: Ctrl, Alt, Shift, Win. So Ctrl+Shift+K shows as three caps: Ctrl, Shift, K. Keys come from `GetKeyNameText`, so they follow the keyboard layout.
+- **Key caps.** Modifiers read as words, in this order: Ctrl, Alt, Shift, Win. So Ctrl+Shift+K shows as three caps: Ctrl, Shift, K. Letters, digits, and punctuation come from `MapVirtualKeyEx(vk, MAPVK_VK_TO_CHAR, layout)` with the layout of the foreground window's thread, so a German layout shows its own keys. Every other key (arrows, Enter, keypad Enter, F-keys) comes from a fixed name table.
+- **AltGr.** On layouts with AltGr, Windows sends a fake left Ctrl with scan code `0x21D` just before right Alt. While that Ctrl and right Alt are down, neither counts as a modifier. A real left Ctrl has scan code `0x1D`.
 - **Keystroke timing.** Each key holds 1.5 s, then the capsule fades over 0.35 s and the window hides. At most 4 entries; older ones at 50% opacity. The same combo again within 1.5 s shows "×2", "×3". Keys live in memory only while on screen. Nothing is logged or saved.
 - **Keystroke window.** 1200 × 150 epx, centered on the display with the pointer, 40 epx above the bottom of its work area (so above the taskbar). Caps are 20 epx text. Multiply every size by that display's scale (`GetDpiForMonitor` / 96).
-- **Skip what the viewer should not see:** injected keys (`LLKHF_INJECTED`, which is how password managers type), keys while the focused element is a password field, the app's own shortcuts (compare virtual key and modifiers with every bound combo), and typing in the chapter prompt.
+- **Skip what the viewer should not see:** injected keys (`LLKHF_INJECTED`, which is how password managers type), keys while the focused element is a password field, the app's own shortcuts (compare virtual key and modifiers with every bound combo; in an app built from several specs, every feature's shortcuts), and typing in the chapter prompt.
 - **Cursor halo.** Diameter 50, 70 (default), or 100 epx. Radial gradient of #7B5CFF at alpha 0.38, 0.2, 0 (stops 0, 0.55, 1). A press scales it to 0.78 over 0.12 s. Each click adds a ring 1.1 times the halo that scales 0.3 to 1.25 and fades 0.95 to 0 over 0.5 s, ease-out, at the click point. Right clicks use the lighter #A88FFF.
 - **Recording mode** turns on what its options say (defaults: hide desktop icons on, hide the taskbar on, keystrokes on, cursor on, Focus commands empty). It records what it changed and turns off exactly that. Options can change only while it is off. The tray icon gets a red dot and its tooltip says "Studio, recording mode on"; the first tray menu item reads "Turn off recording mode".
 - **Focus commands.** Two text fields, "Command when it turns on" and "Command when it turns off", run hidden through `pwsh -NoProfile -EncodedCommand`, or `powershell.exe` when pwsh is missing. A link opens `ms-settings:notifications` so the user can set Do not disturb by hand.
@@ -134,7 +136,7 @@ As the user, I right-click the tray icon and switch keystrokes and the cursor ha
 Screens: tray-menu.png
 Acceptance:
 - [snap] The menu lists Keystrokes and Cursor highlight with check marks, plus Settings and Quit.
-- [self] Each item changes the tool's state and shows a toast whose window reads back WDA_EXCLUDEFROMCAPTURE from GetWindowDisplayAffinity.
+- [self] Each item changes the tool's state and shows a toast, a layered window that reads back WDA_EXCLUDEFROMCAPTURE from GetWindowDisplayAffinity. A Windows notification from the tray icon is not this toast: it lands in recordings and in Notification Center.
 Status: todo
 
 ### S-002 Know what the keystroke overlay can see
@@ -142,7 +144,7 @@ As the user, I turn on keystrokes and the Keystrokes page tells me what it shows
 Screens: settings-keystrokes.png
 Acceptance:
 - [snap] The page says "Keys typed into apps running as administrator do not show. Studio never saves or sends your keys."
-- [self] The keyboard hook handle is non-zero only while keystrokes are on, and zero after turning them off.
+- [self] The keyboard hook handle is non-zero only while keystrokes are on, and zero after turning them off. With one keyboard hook shared by several features, check this only while no other feature holds it.
 - [manual] With an elevated Terminal in front, no keys show and nothing breaks; keys show again within 1 s of switching back to a normal app.
 Status: todo
 
@@ -155,6 +157,8 @@ Acceptance:
 - [unit] The same combo three times within 1.5 s gives one entry with count 3.
 - [unit] In "All keys" mode typed text keeps the last 24 characters; arrows never become text.
 - [unit] Injected key events never make an entry.
+- [unit] A left Ctrl with scan code 0x21D plus right Alt counts as no modifier, so AltGr+Q gives "@" as text; a left Ctrl with scan code 0x1D plus Alt is a Ctrl+Alt combo.
+- [self] Synthetic key events fed to the hook handler (not `SendInput`, whose keys are injected) make the expected entries, and nothing reaches the person's windows.
 - [manual] A password field in Edge shows nothing in "All keys" mode, AltGr+Q on a German layout shows "@" as text and not as a Ctrl+Alt combo, and the overlay never takes a click.
 Status: todo
 
@@ -164,6 +168,7 @@ Screens: cursor.png, settings-cursor.png
 Acceptance:
 - [snap] A violet halo follows the pointer; Small, Medium, Large set 50, 70, 100 epx.
 - [manual] It follows the pointer across two displays with different scaling without lag or a size jump, and right clicks ripple lighter.
+- [self] Posting a ripple message to the mouse hook thread, in place of a click, shows a ripple window at that point.
 - [self] Turning it off removes the mouse hook and every overlay window.
 Status: todo
 
@@ -172,7 +177,8 @@ As the user, I record a shortcut for each action in Settings.
 Screens: settings-keystrokes.png
 Acceptance:
 - [snap] Every action has a recorder field; a combo another app owns (ERROR_HOTKEY_ALREADY_REGISTERED) shows "Already in use".
-- [self] Pressing a recorded shortcut runs its action, and it never shows in the keystroke overlay.
+- [self] Posting the `WM_HOTKEY` a recorded shortcut causes runs its action, and the same combo fed to the hook handler makes no entry in the keystroke overlay.
+- [manual] Pressing a recorded shortcut runs its action, and it never shows in the keystroke overlay.
 Status: todo
 
 ## M2 Recording mode and chapters
@@ -247,14 +253,21 @@ Status: todo
 - **The hooks are blind to elevated windows.** UIPI blocks input to a higher integrity window from reaching a normal app's low-level hooks. Studio does not run as administrator to fix this; elevating would also make every script it runs elevated. Say it on the Keystrokes page instead.
 - **Antivirus watches keyboard hooks.** An unsigned exe that installs `WH_KEYBOARD_LL` looks like a keylogger to some scanners. Install the hook only while the overlay is on, remove it when off, write nothing about keys to disk or to `APP_LOG`, and sign the exe before you share it.
 - **Track modifiers from the hook events.** Inside a low-level callback, `GetAsyncKeyState` still holds the state from before this key. Keep your own set of held modifiers from the down and up events, and clear it on a session lock (`WTSRegisterSessionNotification`, then `WTS_SESSION_LOCK`), or Ctrl sticks after Win+L.
-- **AltGr is Ctrl plus Alt.** On layouts with AltGr, Windows sends a left Ctrl just before right Alt. Treat that pair as AltGr, or every "@" on a German keyboard shows as a Ctrl+Alt shortcut.
+- **AltGr is Ctrl plus Alt.** On layouts with AltGr, Windows sends a left Ctrl just before right Alt. Tell that fake Ctrl by its scan code `0x21D` and treat the pair as AltGr, or every "@" on a German keyboard shows as a Ctrl+Alt shortcut.
+- **`GetKeyNameText` needs the extended-key bit.** Without `LLKHF_EXTENDED` moved into bit 24 of its argument, the arrows read as "Num 4" and keypad Enter reads as Enter. It also names keys in the system language, not the layout's. Use `MapVirtualKeyEx` for printable keys and a name table for the rest.
+- **UI Automation has no managed wrapper in a WinUI app.** `UIAutomationClient` is a WPF assembly, and .NET 10 without WPF has none. Call `CoCreateInstance(CUIAutomation)` and two vtable slots: `IUIAutomation::GetFocusedElement` (slot 8) and `IUIAutomationElement::GetCurrentPropertyValue` (slot 10) with `UIA_IsPasswordPropertyId`. Run it on a pool thread on `EVENT_OBJECT_FOCUS`, never in the hook.
 - **`ToUnicodeEx` can eat dead keys.** Calling it from the hook changes the kernel keyboard state, so ´ then e stops making é in the user's app. Pass flag bit 2 (Windows 10 1607 and later), which leaves the state alone.
 - **No secure input flag on Windows.** macOS tells you when a password field has focus; Windows does not. Ask UI Automation for `CurrentIsPassword` when focus changes, cache the answer, and treat "unknown" as a password. Password managers inject keys, so skipping `LLKHF_INJECTED` covers autotype.
 - **A WinUI window has no built-in per-pixel transparent background.** Draw the overlays in plain Win32 layered windows with `UpdateLayeredWindow` and a premultiplied BGRA bitmap. Click-through needs both `WS_EX_LAYERED` and `WS_EX_TRANSPARENT`. Acrylic does not exist there, so the capsules are a dark plate at 85% with a 1 epx light border.
+- **GDI text has no alpha.** `DrawText` into the DIB writes alpha 0, so the caps' labels vanish. Wrap the DIB's memory in GDI+ (`new Bitmap(w, h, stride, PixelFormat.Format32bppPArgb, bits)` from `System.Drawing.Common`) and draw with `TextRenderingHint.AntiAliasGridFit`; ClearType leaves color fringes on a layered window.
+- **A fade costs no redraw.** `UpdateLayeredWindow` with only a `BLENDFUNCTION` (no position, size, or DC) changes the overall alpha of the last bitmap.
+- **The mouse hook must not wait on the UI thread.** `SetWindowPos` on a window another thread owns sends that thread a message and waits. A halo owned by the UI thread and moved from the hook thread blocks the hook whenever the UI is busy. Let the hook thread own the halo and ripple windows; low-level callbacks run on that thread inside `GetMessage`, so storing the point and posting to itself needs no locks.
+- **Thread timers.** `SetTimer(0, id, ...)` without a window ignores `id` and returns a new one; `KillTimer(0, id)` needs the returned id, or the timer runs forever. Its `WM_TIMER` has `hwnd == 0`, so handle it in the loop before `DispatchMessage`.
+- **Snapshots cannot see layered windows.** `PrintWindow` does not capture a layered Win32 window. For the `keystrokes` and `cursor` snapshots, paint the real overlay bitmap and show it in a WinUI preview window through a `SoftwareBitmapSource` (premultiplied BGRA matches the DIB exactly).
 - **A full-screen overlay per display is too slow.** Redrawing a 4K layered window on every mouse move uploads 33 MB a frame. Move one small halo window with `UpdateLayeredWindow` (position only when the image has not changed), and draw each ripple in its own short-lived window at the click point.
 - **Physical pixels everywhere.** With PerMonitorV2, hook points, `GetCursorPos`, and `SetWindowPos` are physical pixels. Convert epx with the scale of the display under the pointer (`MonitorFromPoint` then `GetDpiForMonitor`), and redraw the halo when the pointer crosses to a display with another scale.
-- **Topmost is shared.** Other topmost windows, the taskbar, and Start can cover the overlays. Call `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE)` each time an overlay shows. Exclusive full-screen games draw over everything; borderless full screen is fine.
-- **`WDA_EXCLUDEFROMCAPTURE` covers Windows capture paths only.** Windows Graphics Capture, desktop duplication, and screenshot tools leave the window out. A capture card or a phone camera still sees it. Set it only on the teleprompter, the chapter prompt, and toasts; the keystroke overlay and halo are meant to be recorded. Check the return value, read it back with `GetWindowDisplayAffinity`, and tell the user to make a short test recording.
+- **Topmost is shared.** Other topmost windows, the taskbar, and Start can cover the overlays. Call `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE | SWP_SHOWWINDOW)` each time an overlay shows. Exclusive full-screen games draw over everything; borderless full screen is fine.
+- **`WDA_EXCLUDEFROMCAPTURE` covers Windows capture paths only.** Windows Graphics Capture, desktop duplication, and screenshot tools leave the window out. A capture card or a phone camera still sees it. Set it only on the teleprompter, the chapter prompt, and toasts; the keystroke overlay and halo are meant to be recorded. It works on an `UpdateLayeredWindow` window (Windows 11 26100). Check the return value, read it back with `GetWindowDisplayAffinity`, and tell the user to make a short test recording.
 - **Desktop icons: missing is not false.** `HideIcons` may be missing, which means shown. Save the state you read, toggle with `WM_COMMAND 0x7402` only when it differs, and restore by the same rule. Never restart Explorer for this: it closes the user's folder windows mid-recording.
 - **The taskbar setting belongs to the user.** Save the `ABM_GETSTATE` result in the snapshot before `ABM_SETSTATE`, and put back exactly that.
 - **Restore on every way out.** Write the snapshot to `recording.json` on turn-on, so the next launch can restore after a crash. On quit and on `WM_ENDSESSION`, restore on the calling thread before returning; a `Task` started then may never run before the process ends.

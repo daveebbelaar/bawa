@@ -238,6 +238,35 @@ image.Source = source;
   efficiency mode: `SetProcessInformation` with `ProcessPowerThrottling`
   and `PROCESS_POWER_THROTTLING_EXECUTION_SPEED`. Turn it off again when
   the window opens.
+- In a suite (many features in one process), throttle one thread, never
+  the process: a throttled process slows the launcher and the switcher
+  too. Give the sampler its own thread and mark it at the top of its loop:
+
+  ```csharp
+  [StructLayout(LayoutKind.Sequential)]
+  struct THREAD_POWER_THROTTLING_STATE { public uint Version, ControlMask, StateMask; }
+
+  [LibraryImport("kernel32.dll")] static partial nint GetCurrentThread();
+  [LibraryImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)]
+  static partial bool SetThreadInformation(nint thread, int infoClass, ref THREAD_POWER_THROTTLING_STATE info, uint size);
+
+  /// EcoQoS for the calling thread only. 3 is ThreadPowerThrottling, 1 is EXECUTION_SPEED.
+  static unsafe bool UseEcoQoS()
+  {
+      var state = new THREAD_POWER_THROTTLING_STATE { Version = 1, ControlMask = 1, StateMask = 1 };
+      return SetThreadInformation(GetCurrentThread(), 3, ref state, (uint)sizeof(THREAD_POWER_THROTTLING_STATE));
+  }
+
+  var thread = new Thread(() => { UseEcoQoS(); Loop(); })
+      { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "Stats sampler" };
+  ```
+
+  The same thread keeps a PDH query on one thread. Onyx's sampler read
+  every stat in about 10 ms (Debug build), so a 2 s interval cost about
+  0.5 percent of one core while something showed the numbers, and
+  nothing while nothing did. Start the thread only while a flyout, page,
+  or tray icon shows the numbers, and pause it while the display is off
+  or the session is locked.
 
 ## Startup
 

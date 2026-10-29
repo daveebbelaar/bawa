@@ -54,9 +54,9 @@ below, the accent color on the selected row. Results never animate.
 | Global shortcut | `RegisterHotKey` with `MOD_ALT \| MOD_NOREPEAT` and `VK_SPACE`, on the tray icon's window | None |
 | Panel | WinUI `Window`, `OverlappedPresenter.SetBorderAndTitleBar(true, false)`, `IsAlwaysOnTop`, `AppWindow.IsShownInSwitchers = false`, `DesktopAcrylicBackdrop` | None |
 | Desktop apps | `.lnk` files under `%ProgramData%\Microsoft\Windows\Start Menu\Programs` and `%APPDATA%\Microsoft\Windows\Start Menu\Programs` | None |
-| Packaged apps (Calculator, Terminal, Settings) | `PackageManager.FindPackagesForUser("")`, `Package.GetAppListEntriesAsync()`, `AppListEntry.LaunchAsync()` | None |
+| Packaged apps (Calculator, Terminal, Settings) | `PackageManager.FindPackagesForUser("")` (works unpackaged, about 1 s, so in the background), `Package.GetAppListEntriesAsync()`; open with `shell:AppsFolder\<AUMID>` through `Process.Start` with `UseShellExecute`, so no `AppListEntry` is kept | None |
 | File search | Windows Search through `System.Data.OleDb`: provider `Search.CollatorDSO`, `SELECT ... FROM SystemIndex` | None (the Windows Search service must run) |
-| Icons | `StorageFile.GetThumbnailAsync(ThumbnailMode.SingleItem, 64)`; `AppListEntry.DisplayInfo.GetLogo` for packaged apps | None |
+| Icons | `StorageFile.GetThumbnailAsync(ThumbnailMode.SingleItem, 64)`, else `SHDefExtractIconW` on the exe; `AppListEntry.DisplayInfo.GetLogo` for packaged apps | None |
 | Open, reveal | `Process.Start` with `UseShellExecute = true`; `explorer.exe /select,"<path>"` | None |
 | Give focus back | `GetForegroundWindow` before showing, `SetForegroundWindow` on Esc | None |
 | Tray icon | `Shell_NotifyIcon`, `TrackPopupMenuEx` | None |
@@ -71,7 +71,7 @@ Types to create:
 
 - `HotkeyCenter` and `KeyCombo`: register the shortcut, record failures, suspend while recording.
 - `LauncherWindow`: the panel, `PreviewKeyDown` on the search box, `Present()` and `Hide()`.
-- `LauncherModel` (`ObservableObject`): Query, Results, Selection, generation; `Search()` and `Activate()`.
+- `LauncherModel` (`ObservableObject`): Query, Results, Selection, generation; `Search()` and `Activate()`. Opening a target and the file query are delegates, so self-tests never start another app and never depend on the index.
 - `FuzzyMatch` (Core): pure static class with `Fold`, `Initials`, `Score`. Unit tested.
 - `AppIndex`, `FileSearch`, `QuickSearchStore` and `UsageStore` (SQLite, Core), `IconCache`.
 - `SettingsPage`, `ShortcutRecorder`, `TrayIcon`.
@@ -103,12 +103,13 @@ Ranking and limits:
 
 - App score = fuzzy score + `Math.Min(200, opens * 20)` + 300 when this app was the last pick for this exact query.
 - Keep the top 6 apps. When the best app scores 500 or more, hide apps under 450.
-- Order: apps, then quick search hint rows, then files, then one "Search Google" row last. An app wins a tie.
+- Order: apps, then quick search hint rows, then files, then one "Search Google" row last. An app wins a tie; equal scores of the same kind sort by name.
 - Desktop apps: every `.lnk` in both Start menu folders and their subfolders, named by the file name without `.lnk`. Drop names that start with "Uninstall". Add File Explorer (`explorer.exe`) when no shortcut has that name. Rescan on every open, on a background thread.
 - Packaged apps: read at launch, and again in the background on each open; show the last list meanwhile. Skip framework and resource packages. Drop duplicate names; a desktop shortcut wins.
 - Files: only when the query has 2 or more characters. Wait 80 ms after the last key, then run the query on a background thread.
 - File query: one `CONTAINS(System.FileName, '"word*"')` per word, joined with `AND`, plus `System.FileExtension <> '.lnk'`. Double every `'`, strip `"` and `*`. Scope: one `SCOPE='file:<folder>'` per folder in Settings, joined with `OR`, default the user folder. `SELECT TOP 80 System.ItemPathDisplay`.
-- Drop paths containing `\node_modules\`, `\.git\`, `\AppData\`, `\bin\`, `\obj\`, `\site-packages\`, `\.venv\`. Score by file name plus usage, keep 12.
+- Drop paths containing `\node_modules\`, `\.git\`, `\AppData\`, `\bin\`, `\obj\`, `\site-packages\`, `\.venv\`. Score by file name plus usage, keep 12. `\AppData\` also drops `%TEMP%` (`AppData\Local\Temp`), so a self-test cannot seed a file result there: it fakes the file query instead.
+- App subtitle: "Application" for a desktop app, "App" for a packaged one. A Start menu shortcut path says nothing to the person.
 - File subtitle: the last three folders, the user folder as `~`: "… › Projects › app › src".
 - Quick search: "keyword rest" where the keyword matches an enabled, ready search. Ready means a keyword without spaces, and at least one extension (files) or a url with `{query}` (website). Defaults: `code` (files, `code-workspace`), `g` Google, `yt` YouTube, `gh` GitHub.
 - Website kind: one row that opens the url with `Uri.EscapeDataString(text)`. Files kind: `System.FileExtension = '.ext'` for each extension (joined with `OR`), plus `System.FileName LIKE '%word%'` per word. `TOP 400`, `ORDER BY System.DateModified DESC`, show 60. Opens in the chosen app (`Process.Start(appPath, "\"" + path + "\"")`), or the default app.
@@ -140,7 +141,8 @@ Depends: S-001
 Acceptance:
 - [unit] FuzzyMatch scores exact > prefix > initials > word prefix > substring > letters in order.
 - [unit] Initials("Visual Studio Code") is "vsc"; "cafe" matches "Café".
-- [snap] Rows show icon, name, path, and Ctrl+1 to 9 key caps; the last row is "Search Google".
+- [snap] Rows show icon, name, a subtitle ("Application" or "App" for apps, the folders for files), and Ctrl+1 to 9 key caps; the last row is "Search Google".
+- [self] Typing "calc" into the panel's search box puts Calculator first. Opening goes to a recording delegate, so no app starts.
 Status: todo
 
 ### S-003 Open, reveal, or search the web
@@ -169,6 +171,7 @@ Depends: S-002
 Acceptance:
 - [manual] Files appear within about 150 ms, between apps and the web row; rows above them do not move.
 - [unit] Paths in node_modules, .git, AppData, bin, obj, site-packages, .venv are dropped.
+- [self] With the file query faked to return a made-up path outside AppData, its row shows between the apps and the web row.
 - [snap] The subtitle shows the last three folders, the user folder as ~.
 - [manual] With the Windows Search service stopped, a row says "File search needs Windows Search" and apps still show.
 Status: todo
@@ -237,6 +240,9 @@ Status: todo
 - A window with `WS_EX_NOACTIVATE` never gets keyboard focus, so a TextBox in it cannot be typed into. The launcher panel activates. Save `GetForegroundWindow()` before showing it, and on Esc hide it and call `SetForegroundWindow` on the saved window.
 - `Activate()` from the hotkey handler can leave the panel behind the app in front with a flashing taskbar button, and typing then goes to the other app. Check `GetForegroundWindow()` after `Activate()` and call `Win32.ForceForeground` when it is not the panel.
 - Set focus to the search box in the window's `Activated` handler, not before the show. Focus set on a hidden window is lost.
+- A plain `TextBox` on acrylic turns white when focused. For a bare search field, override `TextControlBackground`, `TextControlBackgroundPointerOver`, `TextControlBackgroundFocused`, and the matching `TextControlBorderBrush` keys in `TextBox.Resources`.
+- WinUI raises `TextChanged` after `Text` is set, not during. Code that sets `Text` and reads the rows at once (a self-test, a hint that fills in "yt ") sees the old rows, and the late event then searches again. Search directly when code sets the text, and skip the event when the text equals the last query.
+- The panel hides when it loses activation, and parallel test runs share one foreground. Self-tests turn hide on deactivate off while they run.
 - The TextBox handles Up, Down, and Tab itself. Handle them in `PreviewKeyDown` on the TextBox and set `Handled`; by `KeyDown`, Tab has already moved focus.
 - The first press built the window and its XAML tree, and the panel came up late. Build it 2 s after launch, show it off screen with `AppWindow.Show(false)`, let it draw one frame, and hide it.
 - Files arrive later than apps. Insert them between the instant rows and the web row, and keep the selection by row id if the user already moved. Bump a generation counter on every search and drop any async result from an older one.
@@ -246,7 +252,7 @@ Status: todo
 - When the Windows Search service is stopped or disabled, `OleDbConnection.Open()` throws. Catch it, show one row that says so, and keep the app results.
 - The index holds `.venv\Lib\site-packages` and `node_modules` folders under the user folder. Without the path filter they fill all 12 file rows.
 - Calculator, Terminal, and Settings have no `.lnk` in the Start menu folders. Read packaged apps through `PackageManager`. That call is slow, so cache the list and refresh it in the background.
-- Icons from `GetThumbnailAsync` are async shell work. Ask for 64 px once, show them at 32 epx, and keep them in a cache keyed by path, bounded to the current app list.
+- Icons from `GetThumbnailAsync` are async shell work. Ask for 64 px once, show them at 32 epx, and keep them in a cache keyed by path, bounded to the current app list. It throws `COMException` for `C:\Windows\explorer.exe` and `System32\cmd.exe` on Windows 11: fall back to `SHDefExtractIconW` and copy the HICON's bitmap into a `WriteableBitmap`.
 - On two monitors at different scales, the hidden panel has the DPI of the monitor it was on last. Size it with `GetDpiForMonitor` for the monitor under the pointer, then move it.
 - Resizing the panel for each row made it jump. Resize once per finished search, with the top edge fixed, and only when the row count changed.
 - A second copy fails `RegisterHotKey` with `ERROR_HOTKEY_ALREADY_REGISTERED` and shows a false "taken" warning. Make the app single instance (`AppInstance.FindOrRegisterForKey`) and send the second launch to the first copy's Settings.

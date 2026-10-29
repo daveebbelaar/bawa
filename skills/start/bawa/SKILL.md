@@ -28,6 +28,7 @@ page, and the real icon in every snapshot.
 | An app they want to replace or rebuild | `clone` |
 | A brief or a screen index, no backlog | `user-stories` |
 | A spec from BAWA's `specs/` folder | `app-brief` (it copies the spec) |
+| Several specs to build as one app (a suite) | `new-windows-app`, then its suite.md |
 
 ## Build
 

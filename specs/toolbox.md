@@ -53,12 +53,13 @@ accent fill when on. A short dark toast near the pointer confirms each change.
 | --- | --- | --- |
 | Keep awake | `PowerCreateRequest` with a `REASON_CONTEXT` string, `PowerSetRequest` for `PowerRequestSystemRequired` and `PowerRequestDisplayRequired`, `PowerClearRequest` | None |
 | Stop when an app quits | `Process.GetProcessById(pid)`, `EnableRaisingEvents`, `Exited` | None for your own apps; see Gotchas for elevated ones |
-| Hidden files, file extensions | `Hidden` and `HideFileExt` DWORDs in `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`, then `SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST \| SHCNF_FLUSH)` | None |
+| Hidden files, file extensions | `Hidden` and `HideFileExt` DWORDs in `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`, then `SHGetSetSettings` with `SSF_SHOWALLOBJECTS` or `SSF_SHOWEXTENSIONS` and set true, then `SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST \| SHCNF_FLUSH)` | None |
 | Desktop icons | Read `HideIcons` in the same key. Toggle with `PostMessage(WM_COMMAND, 0x7402)` to the desktop's `SHELLDLL_DefView` window (undocumented, see Gotchas) | None |
 | Taskbar auto-hide | `SHAppBarMessage(ABM_GETSTATE)` and `ABM_SETSTATE` with `ABS_AUTOHIDE` | None |
-| Read and set dark mode | `AppsUseLightTheme` and `SystemUsesLightTheme` DWORDs in `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, then `SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "ImmersiveColorSet")` | None |
+| Read and set dark mode | `AppsUseLightTheme` and `SystemUsesLightTheme` DWORDs in `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, then `SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "ImmersiveColorSet", SMTO_ABORTIFHUNG, 1000)` off the UI thread | None |
+| Check Keep awake without admin | `CallNtPowerInformation(SystemExecutionState)` (powrprof.dll) returns `ES_SYSTEM_REQUIRED \| ES_DISPLAY_REQUIRED` (0x3) while a request holds | None |
 | Follow dark mode changes | `Windows.UI.ViewManagement.UISettings.ColorValuesChanged` | None |
-| List sound devices | MMDevice API: `IMMDeviceEnumerator.EnumAudioEndpoints(eRender or eCapture, DEVICE_STATE_ACTIVE)`, `PKEY_Device_FriendlyName`, `GetDefaultAudioEndpoint(eRender, eConsole)` | None |
+| List sound devices | MMDevice API through classic `[ComImport]` interfaces: `IMMDeviceEnumerator.EnumAudioEndpoints(eRender or eCapture, DEVICE_STATE_ACTIVE)`, `PKEY_Device_FriendlyName`, `GetDefaultAudioEndpoint(eRender, eConsole)` | None |
 | Follow device changes | `IMMNotificationClient` through `RegisterEndpointNotificationCallback` | None |
 | Set the default device | No public API. The undocumented `IPolicyConfig.SetDefaultEndpoint` COM interface, behind one class, with `ms-settings:sound` as the fallback | None |
 | Shortcuts | `RegisterHotKey` | None |
@@ -70,7 +71,7 @@ Main types:
 
 - `KeepAwake`: `ObservableObject`. Holds the power request handle, the end timer, and the app watch. `KeepAwakeDuration`: `Minutes15`, `Hour1`, `Hours2`, `Indefinitely`.
 - `SystemToggle`: enum `HiddenFiles`, `FileExtensions`, `DesktopIcons`, `DarkMode`, `TaskbarAutoHide`, with title, one-word label, detail line, Segoe Fluent glyph, toast text.
-- `SystemToggles`: reads and writes the setting behind each toggle. No state. Lives in `Toolbox.Core` except the Win32 calls.
+- `SystemToggles`: reads and writes the setting behind each toggle over an `IDwordStore`. No state. Lives in `Toolbox.Core` except the Win32 calls. The self-test points the store at a test key (`HKCU\Software\ToolboxSelfTest`), so its writes never reach the person's settings.
 - `QuickToggles`: `ObservableObject` live state for the views, a `Busy` set, optimistic changes.
 - `AudioDevices`: `ObservableObject` list of outputs and inputs and the current defaults, in MMDevice ids.
 - `DefaultDeviceSetter`: the only class that touches `IPolicyConfig`. Returns true or false, never throws.
@@ -85,7 +86,8 @@ Behaviors that matter:
 - **Keep awake tile.** Click toggles with the saved duration. Right-click shows 15 minutes, 1 hour, 2 hours, Until turned off, and Turn off.
 - **Toggles.** Click sets the new state right away, marks the tile busy (a small `ProgressRing`, further clicks ignored), and runs the change in a `Task` off the UI thread. On success: toast. On failure: put the old state back and toast the error.
 - **Refresh.** Read every toggle again when the flyout or Settings opens (the flyout window stays alive, so read on its `Activated` event), on `UISettings.ColorValuesChanged`, and on `WM_SETTINGCHANGE` in the tray window.
-- **Sound.** The sound menu lists outputs, then inputs, each with a check on the current default. Picking one calls `DefaultDeviceSetter` for `eConsole`, `eMultimedia`, and `eCommunications`. Treat only `eConsole` as the result; ignore the other two failing. When it returns false, open `ms-settings:sound` and toast "Windows did not allow the switch. Pick the device in Sound settings." Refresh on device added, removed, state changed, and default changed.
+- **Switches that show the real state.** `ToggleSwitch.Toggled` fires when code sets `IsOn`. Set the switches inside a quiet flag, and act only when a switch differs from what Windows reports. Without it, the page writes every setting back to Windows when it loads, and a self-test that opens every page changes the person's settings.
+- **Sound.** The sound menu lists outputs, then inputs, each with a check on the current default. Read the list again in `MenuFlyout.Opening`, so a device plugged in a moment ago shows up. Picking one calls `DefaultDeviceSetter` for `eConsole`, `eMultimedia`, and `eCommunications`. Treat only `eConsole` as the result; ignore the other two failing. When it returns false, open `ms-settings:sound` and toast "Windows did not allow the switch. Pick the device in Sound settings." Refresh on device added, removed, state changed, and default changed.
 - **App picker.** Settings lists running apps that have a main window (`Process.MainWindowHandle != 0`), with their icon and name, sorted by name.
 
 | Toggle | Value and key | Missing means | Applies by |
@@ -144,6 +146,7 @@ Screens: flyout.png
 Acceptance:
 - [snap] The cup tile shows its accent on state and the label "Awake".
 - [self] KeepAwake holds exactly one power request handle while on and none after the second click.
+- [self] `CallNtPowerInformation(SystemExecutionState)` reads 0x3 while on and 0x0 after. The state is system-wide: when it already reads 0x3 before the test (another app, or a snapshot run that holds `SetThreadExecutionState`), the check falls back to the handle count and says so.
 - [manual] In an admin terminal, `powercfg /requests` lists "Toolbox Keep awake" under DISPLAY and SYSTEM; it is gone after the second click.
 - [manual] A toast "Keep awake on" shows for 1.5 s near the pointer.
 Status: todo
@@ -162,6 +165,7 @@ As the user, I click the eye tile and File Explorer shows hidden files.
 Screens: flyout.png
 Acceptance:
 - [unit] `Hidden` 1 reads as on; 2 and a missing value read as off.
+- [self] `SHGetSetSettings` with set false gives the same hidden files and extensions state as the registry (read only). The write path runs against the test key.
 - [manual] An open File Explorer window on the user folder shows AppData within 1 s, with no Explorer restart; the tile shows a spinner until it is done.
 Status: todo
 
@@ -183,7 +187,9 @@ Status: todo
 ### S-006 Switch dark mode
 As the user, I click the moon tile and Windows and my apps switch to dark.
 Acceptance:
-- [self] After the switch, `AppsUseLightTheme` and `SystemUsesLightTheme` are both 0, and both 1 after a second click.
+- [self] With the DWORD store on the test key, the switch writes `AppsUseLightTheme` and `SystemUsesLightTheme` both 0, and both 1 after a second click. The real Personalize key is only read.
+- [self] Opening the Settings page with every switch set from the real state writes nothing.
+- [manual] After the switch, the real `AppsUseLightTheme` and `SystemUsesLightTheme` are both 0, and both 1 after a second click.
 - [manual] The taskbar, File Explorer, and Settings change within 2 s, and the tile stays in sync when I change the mode in Settings > Personalization > Colors.
 Status: todo
 
@@ -192,6 +198,7 @@ As the user, I open the sound menu in the flyout header and pick a device.
 Screens: flyout-sound.png
 Acceptance:
 - [snap] The header shows the current output name; the menu lists outputs and inputs with a check on the current ones.
+- [self] Listing outputs and the default reads MMDevice ids only; the self-test never calls `IPolicyConfig`.
 - [manual] Plugging in headphones adds them to the list without reopening the flyout.
 - [manual] Picking a device makes it the default in Settings > System > Sound. When the switch fails, Sound settings opens with a toast that says so.
 Status: todo
@@ -237,16 +244,17 @@ Status: todo
 
 ## Gotchas
 
-- **Explorer does not watch these registry values.** Writing `Hidden` or `HideFileExt` changes nothing on screen until Explorer is told. Call `SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST | SHCNF_FLUSH)` after the write. Restarting explorer.exe also works, but it closes every Explorer window and redraws the taskbar; never do that for a toggle. If a Windows build ignores the notify, `SHGetSetSettings` with `SSF_SHOWALLOBJECTS` or `SSF_SHOWEXTENSIONS` is the shell call that sets the same state.
+- **Explorer does not watch these registry values.** Writing `Hidden` or `HideFileExt` changes nothing on screen until Explorer is told. After the write, set the same state with `SHGetSetSettings` (`SSF_SHOWALLOBJECTS` or `SSF_SHOWEXTENSIONS`, set true), the shell call that owns it, then call `SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST | SHCNF_FLUSH)` so open windows redraw. Restarting explorer.exe also works, but it closes every Explorer window and redraws the taskbar; never do that for a toggle.
 - **Hidden means the Hidden attribute, not a dot.** Windows hides files with the Hidden attribute. `.gitignore` and `.env` already show. Test with AppData in the user folder, not with a dot file.
 - **`HideIcons` alone does nothing until Explorer restarts.** The desktop menu's View > Show desktop icons is the only live path: post `WM_COMMAND` with `0x7402` to the `SHELLDLL_DefView` window. It is an undocumented command id, and it toggles, so read `HideIcons` first and send it only when the state differs. Look for `SHELLDLL_DefView` under `Progman` first, then under each `WorkerW` window; it moves there when a wallpaper slideshow runs. Read `HideIcons` back 500 ms later and toast an error if it did not change.
 - **Two values make dark mode.** `AppsUseLightTheme` is apps, `SystemUsesLightTheme` is the taskbar and Start. Write both, or Settings shows the mode as "Custom". Then broadcast `WM_SETTINGCHANGE` with "ImmersiveColorSet". Use `SendMessageTimeout` with `SMTO_ABORTIFHUNG` and a 1000 ms timeout, off the UI thread: a plain broadcast `SendMessage` waits on every hung window. Old Win32 apps that ignore the message switch on their next launch. Unlike macOS, no permission prompt is involved.
 - **Keep a reference to `UISettings`.** A `UISettings` object created in a method and dropped is collected, and `ColorValuesChanged` stops firing. Hold it in a field. Its event fires on a background thread; go through the `DispatcherQueue` before touching the view model.
 - **Power requests die on user sleep.** Lid close, the power button, and Start > Sleep end every request; Windows documents this. On Modern Standby laptops on battery, a system request also ends 5 minutes after the sleep timeout. Say both in Settings, not only the lid.
 - **One handle, cleared before it is closed.** A leaked request handle keeps the PC awake after the tile says off. Clear both request types, close the handle, and do it on quit too. `SetThreadExecutionState` is the older way; it belongs to the calling thread, so a call from a pool thread holds or drops the state with that thread. `PowerCreateRequest` is per handle and shows a reason in `powercfg /requests`.
-- **`powercfg /requests` needs an admin terminal.** The app runs without elevation, so self-tests check the handle count inside `KeepAwake`, and only the manual line uses powercfg.
+- **`powercfg /requests` needs an admin terminal.** The app runs without elevation, so only the manual line uses powercfg. A handle count inside `KeepAwake` proves nothing about Windows. `CallNtPowerInformation(SystemExecutionState)` needs no admin and shows what Windows holds: 0x3 while the request is on. It is system-wide, so another process holding a request makes it read 0x3 before, during, and after; fall back to the handle count then.
 - **Watching an elevated app can fail.** `Process.Exited` needs a handle to the process; for an app running as administrator, opening it can throw access denied. Then poll every 2 s for a process with the same pid, name, and start time, and stop when it is gone.
-- **Setting the default sound device has no public API.** Windows ships no supported call for it. `IPolicyConfig` is the private COM interface that open-source sound switchers use. Keep it in `DefaultDeviceSetter`, catch every exception there, and always fall back to `ms-settings:sound`. Expect a Windows update to break it one day; the fallback keeps the app honest.
+- **Setting the default sound device has no public API.** Windows ships no supported call for it. `IPolicyConfig` is the private COM interface that open-source sound switchers use. Keep it in `DefaultDeviceSetter`, catch every exception there, and always fall back to `ms-settings:sound`. Expect a Windows update to break it one day; the fallback keeps the app honest. Never call it from a self-test: it changes the person's device.
+- **Classic `[ComImport]` interop works** for `IMMDeviceEnumerator`, `IMMDevice`, `IPropertyStore`, and `IPolicyConfig` in a .NET 10 WinUI app, with no warnings. Declare the first ten `IPolicyConfig` methods only to hold their vtable slots; `SetDefaultEndpoint` is the eleventh. `PKEY_Device_FriendlyName` comes back as `VT_LPWSTR`: free it with `PropVariantClear`.
 - **Use one kind of device id.** WinRT `DeviceInformation` ids wrap the MMDevice id in `\\?\SWD#MMDEVAPI#...#{interface guid}`. Mixing the two means the check mark never matches the default. Use MMDevice ids everywhere.
 - **`IMMNotificationClient` calls come on a COM worker thread.** Do no work there and never wait on a lock inside the callback. Post to the `DispatcherQueue` and re-read the list from the UI side. Keep the client object in a field so it is not collected while registered.
 - **The taskbar auto-hide state is the user's.** Set it only on a click, never on launch or quit. Read it back with `ABM_GETSTATE` after `ABM_SETSTATE` and show what Windows reports, not what you asked for.

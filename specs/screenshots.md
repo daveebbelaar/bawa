@@ -35,7 +35,7 @@ Global shortcuts, tray icon, single instance. Window captures ask once to hide t
 Snipping Tool
 
 ## Look
-Native WinUI, system accent color. Acrylic corner card with dark, readable buttons. Mica editor window.
+Native WinUI, system accent color. Acrylic corner card with its buttons on a solid theme pill. Mica editor window.
 
 ## Not in version one
 - Scrolling capture, timed capture, cloud upload
@@ -50,14 +50,14 @@ Native WinUI, system accent color. Acrylic corner card with dark, readable butto
 | Tray icon, no taskbar button | `Shell_NotifyIcon`, `NOTIFYICON_VERSION_4` ([recipe](../skills/code/os-integrations/recipes.md#tray-icon)) | None |
 | Capture a display or an area | GDI `BitBlt` from `GetDC(0)` over the virtual screen into a top-down `CreateDIBSection` ([recipe](../skills/code/os-integrations/recipes.md#screen-capture)) | None |
 | Capture a window | `GraphicsCaptureItem.TryCreateFromWindowId` (or `IGraphicsCaptureItemInterop.CreateForWindow` on Windows 10), `Direct3D11CaptureFramePool.CreateFreeThreaded`, one frame, `SoftwareBitmap.CreateCopyFromSurfaceAsync` | Capture border unless the user allows borderless |
-| Hide the border | `GraphicsCaptureAccess.RequestAccessAsync(GraphicsCaptureAccessKind.Borderless)`, then `session.IsBorderRequired = false` (Windows 11) | One prompt |
+| Border state, hide the border | `AppCapability.Create("graphicsCaptureWithoutBorder").CheckAccess()` to read the state (no prompt); `GraphicsCaptureAccess.RequestAccessAsync(GraphicsCaptureAccessKind.Borderless)` on a real window capture or Ask again, then `session.IsBorderRequired = false` (Windows 11) | One prompt |
 | Window under the pointer | `EnumWindows` (top of z-order first), `IsWindowVisible`, `DwmGetWindowAttribute` with `DWMWA_CLOAKED` and `DWMWA_EXTENDED_FRAME_BOUNDS` | None |
-| Picker | One plain Win32 topmost window per display, painted from the frozen bitmap | None |
+| Picker | One topmost window per display, painted from the frozen bitmap. Plain Win32, or a WinUI window made truly borderless (see Gotchas): a WinUI picker of 600 x 400 shows in 4 to 9 ms, 23 ms with window creation | None |
 | Corner card | WinUI window, `WS_EX_NOACTIVATE`, `WS_EX_TOOLWINDOW`, shown with `SW_SHOWNOACTIVATE` ([recipe](../skills/code/os-integrations/recipes.md#non-activating-panel)) | None |
-| Copy | `DataPackage.SetBitmap` plus a `"PNG"` format, `Clipboard.SetContent`, `Clipboard.Flush()` | None |
+| Copy | `DataPackage.SetBitmap` plus `SetData("PNG", stream)`, `Clipboard.SetContent`, `Clipboard.Flush()`, behind one `ClipboardWriter` | None |
 | Drag out | `UIElement.CanDrag`, `DragStarting`, `DataPackage.SetStorageItems` | None |
 | Editor canvas, blur | Win2D `CanvasControl`, `CanvasRenderTarget` for export, `GaussianBlurEffect` | None |
-| Shutter sound | `PlaySound` with `SND_FILENAME` and `SND_ASYNC`, a bundled WAV | None |
+| Shutter sound | `PlaySound` with `SND_FILENAME` and `SND_ASYNC`, a bundled WAV, or `SND_MEMORY \| SND_ASYNC` from a buffer kept for the app's lifetime | None |
 | One copy running | `AppInstance.FindOrRegisterForKey` ([recipe](../skills/code/os-integrations/recipes.md#single-instance)) | None |
 
 Windows has no Screen Recording permission. GDI reads the composed desktop with no prompt, so
@@ -66,8 +66,11 @@ reads a window even when other windows cover it. That API draws a yellow border 
 window while it captures, unless the user allowed borderless capture. The app is PerMonitorV2
 DPI aware (template `app.manifest`), so all capture math is in physical pixels.
 
-Types: `CaptureService` (freeze, crop, window frame), `ScreenFreeze` (bitmap plus virtual
-screen origin), `SelectionOverlay` (one window per display), `WindowFinder`, `CaptureCard`,
+Types: `CaptureService` (freeze, crop, window frame), `ScreenFreeze` (`Capture(box)` for any
+rect, bitmap plus origin), `SelectionOverlay` (one window per display; it takes the areas to cover
+as a parameter, so a self-test can cover only its own test window and drive it with `Move`,
+`Press`, `Release`, and `OnKey`), `WindowFinder`, `CaptureCard`, `ClipboardWriter` (in a test
+run it never touches the clipboard and keeps the last package for checks),
 `AnnotationDocument` (`Shot.Core`: shapes, undo, hit testing), `AnnotationRenderer` (one shape
 into a `CanvasDrawingSession`, for canvas and export), `Pixelate` (`Shot.Core`, block average on
 BGRA bytes), `AnnotationEditor` (window, keys), `CaptureAccess`, `HotkeyCenter`, `ShortcutBox`,
@@ -80,9 +83,13 @@ Behavior that matters:
   only when Windows' own "Use the Print screen key to open screen capture" is off. Settings reads
   `HKCU\Control Panel\Keyboard\PrintScreenKeyForSnippingEnabled`, says which app gets the key,
   and has a button that opens `ms-settings:easeofaccess-keyboard`.
-- Area and window freeze all displays at once, then open the picker on every display. Drag for an
-  area, click for a window, Space switches mode, Escape or right-click cancels. A drag under
-  4 x 4 epx is a click.
+- Area and window first hide the app's own panels (the tray flyout, the card), then freeze all
+  displays at once, then open the picker on every display. Drag for an area, click for a window,
+  Space switches mode, Escape or right-click cancels. A drag under 4 x 4 epx is a click. Pick on
+  the button release, not the press: picking on press hides the picker and the release lands on
+  the app below.
+- Screen capture freezes the display under the pointer with the same `ScreenFreeze.Capture(box)`
+  call, given the monitor rect.
 - The size label shows physical pixels. An area that crosses two displays is cropped from the
   one frozen bitmap, so it works across displays with different scales.
 - Crop an area from the frozen bitmap at `(x - virtualLeft, y - virtualTop)`. Window captures
@@ -90,9 +97,10 @@ Behavior that matters:
 - After a capture: copy (on), save (off), card (on), sound (on). Folder: the Screenshots known
   folder (`SHGetKnownFolderPath` with `FOLDERID_Screenshots`, usually `Pictures\Screenshots`).
   File name: `Shot yyyy-MM-dd 'at' HH.mm.ss.png`.
-- Card: 252 epx wide, 16:9 picture, 6 epx inset, 18 epx from the bottom-left of the work area
-  (above the taskbar). Hides after 8 s unless hovered. Hover: Copy, Save, Annotate, Close.
-  Drag out the saved file or a temp PNG.
+- Card: 252 epx wide, 16:9 picture, 8 epx inset, 16 epx from the bottom-left of the work area
+  (above the taskbar), on the 4 epx grid. Hides after 8 s unless hovered. Hover: Copy, Save,
+  Annotate, Close, on a solid theme pill (`SolidBackgroundFillColorBaseBrush`) so they read over
+  any picture in both themes. Drag out the saved file or a temp PNG.
 - Editor: fits the image in 85% of the work area, min 1000 x 320 epx. Shapes use image pixels,
   top-left origin. Sizes in epx times the capture scale (display DPI / 96): arrow 3, 5, 8;
   box 2, 3.5, 6; text 14, 20, 30.
@@ -131,14 +139,18 @@ As the user, I capture a window for the first time and am asked once to allow ca
 Screens: settings-capture-border
 Acceptance:
 - [manual] On Windows 11 the first window capture calls `RequestAccessAsync(Borderless)`; after Allow, window captures show no yellow border.
-- [snap] Settings shows "Capture border" as Hidden or Shown, with a line on why and an Ask again button.
+- [snap] Settings shows "Capture border" as Hidden or Shown, read with `CheckAccess` (no prompt), with a line on why and an Ask again button.
+- [self] A test run never calls `RequestAccessAsync`, so no prompt shows during a self-test.
 - [manual] On Windows 10, or after Deny, the border shows for the moment of the capture and is not in the image.
 Status: todo
 
 ### S-002 Capture the full screen
 As the user, I press Ctrl+Alt+Shift+3 and the display under the pointer is copied.
 Acceptance:
-- [self] The image is the display's size in physical pixels, on a 100% and a 150% display, without the app's own windows or the tray flyout.
+- [self] A borderless test window with four known colors (no two channels equal), topmost near the bottom-left corner and brought to the front before every read: `ScreenFreeze.Capture` of its rect gives exactly those colors at its size in physical pixels. The self-test never freezes the full screen and never posts the capture shortcut, since a capture action freezes every display.
+- [self] The tray flyout is hidden before the freeze: after the hide, wait out its hide animation (250 ms when it was open), then `DwmFlush`.
+- [self] The copy goes to `ClipboardWriter`, which in a test run keeps the package (a bitmap and "PNG") and never touches the clipboard.
+- [manual] The image is the display's size in physical pixels, on a 100% and a 150% display, without the app's own windows or the tray flyout.
 - [manual] The shutter sound plays and the PNG pastes into Outlook, Paint, and a browser.
 Status: todo
 
@@ -148,6 +160,7 @@ Screens: picker-area
 Acceptance:
 - [snap] The screen dims except the selection, which has a white border and a pixel size label.
 - [unit] An area on a display left of the main one, at negative coordinates, crops the right pixels from the frozen bitmap.
+- [self] The picker, given only the test window's area, shows the frozen picture byte for byte (no frame, no fade), and a drag driven with `Press`, `Move`, and `Release` returns that rect.
 - [manual] Escape returns focus to the app I was in.
 Status: todo
 
@@ -156,7 +169,7 @@ As the user, I press Ctrl+Alt+Shift+5 and click a window.
 Screens: picker-window
 Acceptance:
 - [snap] The window under the pointer gets an accent tint and border.
-- [self] The image is the window's `DWMWA_EXTENDED_FRAME_BOUNDS` size in pixels, with no shadow and no invisible border.
+- [self] Capturing the test window gives its `DWMWA_EXTENDED_FRAME_BOUNDS` size in pixels, with no shadow and no invisible border, and its known colors.
 - [manual] A window half covered by another one comes out whole; windows on other virtual desktops are never offered.
 Status: todo
 
@@ -164,7 +177,7 @@ Status: todo
 As the user, I copy, save, or drag out a capture from the card in the corner.
 Screens: card, card-hover
 Acceptance:
-- [snap] Hover shows Copy and Save; white text stays readable over a white screenshot.
+- [snap] Hover shows Copy and Save on a solid theme pill; they stay readable over a white screenshot in light and dark.
 - [manual] The card never takes focus from the app I am typing in.
 - [manual] Dragging into File Explorer drops a PNG; the card hides after 8 s unless hovered.
 Status: todo
@@ -183,7 +196,7 @@ As the user, I turn copy, save, card, and sound on or off and pick a save folder
 Screens: settings-capture
 Acceptance:
 - [unit] Defaults: copy on, save off, card on, sound on, folder Screenshots.
-- [self] With save on, the file is `Shot yyyy-MM-dd at HH.mm.ss.png` in the folder.
+- [self] With save on and the folder set to a test folder in `%TEMP%`, the file is `Shot yyyy-MM-dd at HH.mm.ss.png` in it.
 - [manual] When OneDrive has moved Pictures, the default folder is the moved Screenshots folder.
 Status: todo
 
@@ -245,9 +258,15 @@ Status: todo
   and shows no border. Windows.Graphics.Capture is the only way to get a window that other
   windows cover, but it shows a yellow border unless the user allowed borderless capture.
 - The docs tie `GraphicsCaptureAccessKind.Borderless` to the `graphicsCaptureWithoutBorder`
-  package capability, and Shot is unpackaged. Check the returned `AppCapabilityAccessStatus` and
-  read the setting back. When it is not `Allowed`, keep the border and say so in Settings. Guard
-  `IsBorderRequired` with `ApiInformation.IsPropertyPresent`: it does not exist on Windows 10 19041.
+  package capability, and Shot is unpackaged. On Windows 11 26200, unpackaged,
+  `AppCapability.Create("graphicsCaptureWithoutBorder").CheckAccess()` returned `Allowed` with no
+  prompt. Read the state with `CheckAccess`, and call `RequestAccessAsync` only on a real window
+  capture or from Ask again. Check the returned `AppCapabilityAccessStatus`. When it is not
+  `Allowed`, keep the border and say so in Settings. Guard `IsBorderRequired` with
+  `ApiInformation.IsPropertyPresent`: it does not exist on Windows 10 19041.
+- On Windows 11, `GraphicsCaptureItem.TryCreateFromWindowId(new WindowId((ulong)hwnd))` needs no
+  COM interop. Keep `IGraphicsCaptureItemInterop` as the Windows 10 fallback. If the window
+  capture fails, crop the window from the frozen screen.
 - Size window captures from `DWMWA_EXTENDED_FRAME_BOUNDS`, not `GetWindowRect`. `GetWindowRect`
   includes the invisible resize borders, about 7 px a side at 100%. If a frame comes back larger
   than the visible bounds, crop the extra.
@@ -256,6 +275,27 @@ Status: todo
   windows, minimized windows, and windows smaller than 8 x 8 px too.
 - Use one picker window per display. A window across displays with different scales gets one
   DPI and draws the size label and border at the wrong size on the others.
+- A "borderless" WinUI window is not borderless. `OverlappedPresenter.SetBorderAndTitleBar(false,
+  false)` leaves `WS_DLGFRAME`, so the client area sits 3 px inside the window on every side: the
+  frozen picture is scaled down and off by 3 px, and the window highlight misses by 3 to 4 px.
+  Clearing the style with `SetWindowLongPtr` does not stick, since the presenter puts it back on
+  show. Subclass the window (`SetWindowSubclass`), answer `WM_NCCALCSIZE` (wParam TRUE) with 0,
+  then `SetWindowPos` with `SWP_FRAMECHANGED`. A self-test reads the picker back and compares it
+  byte for byte with the frozen picture.
+- Windows 11 rounds every top-level window and draws a 1 px gray outline over its content. On a
+  full-screen picker that is an outline around each display. Set
+  `DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_DONOTROUND` and `DWMWA_BORDER_COLOR = DWMWA_COLOR_NONE`.
+- A frozen screen must appear at once, not fade in. Set `DWMWA_TRANSITIONS_FORCEDISABLED` on the
+  picker, and on test windows: a check that read the screen mid-fade got #FE3B30 for #FF3B30.
+- Moving a window onto a display with another scale makes WinUI apply Windows' suggested size
+  (`WM_DPICHANGED`). After the move, when the outer rect is not the display rect, move it again.
+- Keys in a full-screen picker need a focused control. A `Grid` cannot take focus, so its
+  `KeyDown` never fires. Use a `UserControl` with `IsTabStop = true`, focus it with
+  `Focus(FocusState.Programmatic)` after `Activate`, and set `UseSystemFocusVisuals = false`.
+- GDI leaves the alpha byte at 0, and a `WriteableBitmap` treats that as transparent. Set alpha
+  to 255 after the copy.
+- A GDI capture reads whatever is on top, other apps' test windows included. A self-test's test
+  window sits near the bottom-left, is topmost, and comes to the front before every read.
 - PrtScn belongs to Snipping Tool by default on Windows 11. When that setting is on, the key goes
   to Snipping Tool, not to you. Default to Ctrl+Alt+Shift+3/4/5 and offer PrtScn as an opt-in
   that explains the Windows setting. Leave Win+Shift+S alone: Windows owns it.
@@ -268,8 +308,16 @@ Status: todo
 - `Clipboard.SetContent` throws when another app holds the clipboard open. Retry three times,
   50 ms apart.
 - The card must never take focus. Create it with `WS_EX_NOACTIVATE` and show it with
-  `SW_SHOWNOACTIVATE`, or the app the user is typing in loses the caret. Give its buttons a dark
-  fill with white text; hover makes fills darker, never lighter, or they vanish over a bright picture.
+  `SW_SHOWNOACTIVATE`, or the app the user is typing in loses the caret. Set `IsTabStop = false`
+  on its buttons, or they get keyboard focus on show and draw a focus rectangle. Put the buttons
+  on a solid theme pill; a hard-coded dark fill with white text breaks the theme brushes rule.
+- Placing a bordered WinUI window by its outer rect leaves it small: the invisible resize border
+  (8 px a side at 125%) is inside that rect, so `AppWindow.MoveAndResize(card)` gave a visible
+  card of 299 x 178 px instead of 315 x 186. Show it, measure the outer rect and
+  `DWMWA_EXTENDED_FRAME_BOUNDS`, then move it again by the difference.
+- `AppWindow.IsVisible` can disagree with `IsWindowVisible` for a non-activating window (seen once
+  in five runs), so a hide that checks it does nothing. To dismiss the card, check
+  `IsWindowVisible` and call `AppWindow.Hide()` yourself.
 - Drag and drop from Shot into an app running as administrator fails without an error, because
   UIPI blocks it. Copy still works. See [elevation and UIPI](../skills/code/os-integrations/recipes.md#elevation-and-uipi).
 - Blur with Win2D `GaussianBlurEffect` and `BorderMode = EffectBorderMode.Hard`. The soft
@@ -277,8 +325,8 @@ Status: todo
 - Pixelate in `Shot.Core` on the BGRA bytes and draw the result with
   `CanvasImageInterpolation.NearestNeighbor`. Linear scaling smears the block edges, and the
   result looks like a soft blur instead of blocks.
-- Windows has no shutter sound. Ship a short WAV and play it with `PlaySound(SND_ASYNC)`, so the
-  capture never waits on audio.
+- Windows has no shutter sound. Ship a short WAV (or build one in memory) and play it with
+  `PlaySound(SND_ASYNC)`, so the capture never waits on audio. Test runs stay quiet.
 
 Done when all three shortcuts capture at full pixel size on every display, at every scale and
 with displays at negative coordinates, the card copies, saves, and drags out, and the editor

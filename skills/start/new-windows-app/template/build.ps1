@@ -42,7 +42,7 @@ if ($code -ne 0) { Write-Output 'build failed'; exit 1 }
 
 # Mirror the build folder into the install folder: new files in, stale files out.
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
-$bin = Join-Path $env:LOCALAPPDATA "Dev\$name\artifacts\bin\$name\$($config.ToLower())_win-$arch"
+$bin = Join-Path $env:LOCALAPPDATA "Dev\$name\$(Split-Path $here -Leaf)\bin\$name\$($config.ToLower())_win-$arch"
 robocopy $bin $install /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { Write-Output "install failed: robocopy $bin $install"; exit 1 }
 if (-not (Test-Path (Join-Path $install "$name.pri"))) { Write-Output "install failed: $name.pri is missing"; exit 1 }

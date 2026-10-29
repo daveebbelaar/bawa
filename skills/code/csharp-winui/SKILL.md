@@ -93,6 +93,17 @@ namespaces. Do not name your own types after them. `Path` collides with
 write `System.IO.Path`. `Task` collides with `System.Threading.Tasks.Task`:
 name a to-do `Todo` or `TaskItem`.
 
+**Namespaces collide too, and worse.** C# looks for a name in the
+enclosing namespaces before the `using` lines. A namespace
+`MyApp.Features.Windows` makes `Windows.Foundation` mean
+`MyApp.Features.Windows.Foundation` in every sibling namespace
+(`CS0234`); `MyApp.Features.Clipboard` hides the WinRT `Clipboard` class;
+`Colors` and `Launcher` do the same. Each feature compiles alone, and the
+break shows only when two are merged. Never name a namespace segment
+`Windows`, `Microsoft`, `System`, or after a type you call
+(`Clipboard`, `Colors`, `Launcher`): use `Snapping`, `ClipboardHistory`,
+`Palette`, `AppLauncher`.
+
 ## Win32 interop
 
 WinUI covers windows, pages, and controls. Win32 is still the answer for:
@@ -114,6 +125,31 @@ exception inside them, because one that escapes ends the process.
 Keep `unsafe` to the block that takes the address: a class marked
 `unsafe` cannot `await` anywhere (`CS4004`).
 
+## UI built in code
+
+Building controls in C# is fine, with three traps:
+
+- **Theme brushes.** `Application.Current.Resources["TextFillColorSecondaryBrush"]`
+  returns the brush for the app's theme, not the theme of the element it
+  lands in. A panel or page set to dark (`RequestedTheme`, Settings'
+  theme choice, snapshot mode) then shows light text on dark or dark on
+  dark. Give code-built elements a `Style` from XAML whose setters use
+  `{ThemeResource ...}`, or build the part as a XAML `UserControl`.
+- **Measuring before the window shows.** `Measure` on code-built content
+  before it is in a shown window gets heights wrong (templates are not
+  applied yet). Size a panel to its content after the first layout: in
+  `SizeChanged`, or one `DispatcherQueue` turn after showing it.
+- **Property order in initializers.** `new TextBox { Text = s, AcceptsReturn = true }`
+  keeps only the first line of `s`: `Text` is set while `AcceptsReturn` is
+  still false. Set `AcceptsReturn` (and `TextWrapping`) first.
+
+Events fire when code sets a value, not only when a person does:
+`ToggleSwitch.Toggled` runs when you set `IsOn` to show the current state,
+and `TextBox.TextChanged` runs later, after `Text` is set. Guard handlers
+with a `_loading` flag while a page fills itself, and in a self-test call
+the search or filter function directly instead of waiting for
+`TextChanged`.
+
 ## Glyphs in source
 
 Segoe Fluent Icons glyphs are private-use characters that show as nothing
@@ -132,7 +168,12 @@ character itself.
 | `CS0104 'Path' is an ambiguous reference` | `System.IO.Path` |
 | `CS0104 'Layout' is an ambiguous reference` | Your type shares a WinUI name: rename it (`SnapLayout`) |
 | `CS4004 Cannot await in an unsafe context` | Remove `unsafe` from the class; wrap only the pointer line in `unsafe { }` |
-| App dies at once after `dotnet publish` | The publish folder lacks `<App>.pri` and the `.xbf` files. Install with `build.ps1` |
+| `CS0234 'Foundation' does not exist in the namespace 'MyApp.Features.Windows'` | A namespace segment shadows a framework name (see "Names that collide"): rename the namespace |
+| A crash at load with no build error after `Padding="{StaticResource SpaceSm}"` | Spacing tokens are `x:Double`; `Padding`, `Margin`, and `BorderThickness` need a `Thickness`. Use a `Thickness` token (`CardPadding`) |
+| `0xC000027B` with no `CRASH` line, from a `DispatcherQueue.TryEnqueue` callback | An exception in an enqueued callback ends the process before `UnhandledException`. Wrap the body in `try` and log with `AgentLog.Line` |
+| App dies at once after `dotnet publish` | Publish without `EnableMsixTooling=true` drops `<App>.pri`. Use `tools/publish.ps1` |
+| A multi-line `TextBox` shows only the first line | `Text` was set before `AcceptsReturn`. Set `AcceptsReturn` first |
+| Dark text on dark, or light cards, in one panel only | A brush looked up in code; see "UI built in code" |
 | `ContentDialog.ShowAsync` throws | Set `XamlRoot = this.XamlRoot` first |
 | `The property 'X' was not found in type 'Y'` in `x:Bind` | Add `x:DataType` to the `DataTemplate`, and make the property public |
 | A binding that never updates | `x:Bind` is OneTime by default: add `Mode=OneWay` |

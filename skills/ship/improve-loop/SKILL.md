@@ -1,4 +1,4 @@
----
+﻿---
 name: improve-loop
 description: Autonomous loop that works through docs/STORIES.md one story at a time for a Windows app, building, snapshotting, comparing against reference screenshots, fixing, and committing, until a milestone is done. Use when the user says "keep going", "work through the backlog", "make it match the reference", or wants an unattended improvement loop.
 argument-hint: "[milestone, e.g. M1]"
@@ -118,6 +118,10 @@ sure the tree is committed before you start, and never let it touch the
 user's real database. Keep the PC unlocked and awake: a locked screen
 renders blank snapshots. Each story is a separate commit, so the user can
 review the history in the morning and revert anything they do not like.
+
+To build several features at once (a suite, or independent stories in
+different folders), give each agent its own git worktree and build with
+`tools/dev.ps1`: [../../start/new-windows-app/suite.md](../../start/new-windows-app/suite.md).
 
 Done when every story in the milestone is `done` or named in the report as
 blocked with a reason, each done story has its own commit, and the user

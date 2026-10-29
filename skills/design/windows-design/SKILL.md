@@ -1,4 +1,4 @@
----
+﻿---
 name: windows-design
 description: Design rules that make a WinUI 3 app look and feel like a native Windows 11 app, from the Fluent design principles to Mica, the title bar, navigation, command bars, menus, keyboard, type, color, and dark mode. Use when building or reviewing any window, page, command bar, menu, flyout, dialog, or settings page, or when the user asks for a more native, Windows-like, or better designed app.
 ---
@@ -177,7 +177,10 @@ panel.
 - Sentence case for every label, button, title, and menu item: "New item",
   "Open data folder".
 - Dark mode is its own palette, not inverted light mode. Check both in
-  every snapshot. High contrast themes replace every brush: theme brushes
+  every snapshot. UI built in C# must get its colors through a XAML style
+  with `{ThemeResource}` setters: a brush read from
+  `Application.Current.Resources` in code ignores the panel's theme
+  (`csharp-winui`, "UI built in code"). High contrast themes replace every brush: theme brushes
   handle it; hard-coded colors break it.
 - Icons from Segoe Fluent Icons through `FontIcon` or `SymbolIcon`, the
   same set Windows uses.
