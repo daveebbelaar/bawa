@@ -63,6 +63,14 @@ edit every file. It builds with the .NET SDK alone.
    terminal so `dotnet` is on the PATH. Nothing else: no Visual Studio, no
    Windows App SDK installer. The app carries its runtime.
 
+   Every tool in the template is a PowerShell script. Run them from
+   PowerShell. From Git Bash, call them as
+   `powershell -NoProfile -ExecutionPolicy Bypass -File ./build.ps1`. If
+   PowerShell says "running scripts is disabled", the PC still has
+   Windows' default policy: ask the user to run
+   `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. Do not change
+   it yourself.
+
 2. Pick the name: one UpperCamelCase word. If `docs/BRIEF.md` exists, use
    its name.
 

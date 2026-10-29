@@ -1,4 +1,4 @@
-﻿---
+---
 name: os-integrations
 description: Deep Windows integrations for a native app, such as global hotkeys, keyboard and mouse hooks, tray icons, overlays and panels, moving other apps' windows, screen capture and recording, clipboard, sending keys, toasts, URL protocols, launch at login, single instance, and the elevation limits each one hits. Use when an app must reach outside its own window or control other apps. Use when one app hosts several such features as a suite.
 ---
@@ -120,7 +120,7 @@ icon store the exe's path. To keep them working across rebuilds:
 - Register from the installed exe only, never from a build folder or a
   test run (`APP_STORE` set). That includes `NIM_ADD`: Windows 11 writes a
   key per exe path and icon id under `HKCU\Control Panel\NotifyIconSettings`
-  and never removes it. One PC that built Onyx had dozens of entries for
+  and never removes it. One dev PC had dozens of entries for
   old dev folders. A test run draws its icons but never adds them.
 - Remove every registration in the uninstall step: the Run value, the
   `HKCU\Software\Classes\<scheme>` key, and
@@ -144,14 +144,14 @@ For integrations:
 | The host owns | Features get |
 | --- | --- |
 | The tray icon (uID 1) and its hidden top-level window | Menu rows and a flyout block. A feature with icons of its own (live stats) puts them on its own window with uIDs from 101 |
-| Single instance | Nothing to do: a second launch hands over to the running copy (Onyx's opens Settings) |
+| Single instance | Nothing to do: a second launch hands over to the running copy (it opens Settings) |
 | The hotkey registry: one `RegisterHotKey` per action, keyed by action id | A default combo per action, and "used by another app" when it failed. No two actions share a default |
 | One `WH_KEYBOARD_LL` hook on its own thread | `Subscribe(Func<KeyEvent, bool>)`, disposed in `Stop`. The hook starts with the first subscriber and stops with the last |
 | A foreground tracker (`SetWinEventHook(EVENT_SYSTEM_FOREGROUND)`) | "The window you were using", never the app's own panel or the taskbar |
 
 The shared keyboard hook is the one that matters most. Windows removes a
 hook that takes over a second, and ten hooks in one process are ten
-chances. Onyx's `Shell/InputHook.cs` has this shape:
+chances. The shape:
 
 ```csharp
 public readonly record struct KeyEvent(int VirtualKey, int ScanCode, bool Down, bool Injected,
@@ -172,9 +172,8 @@ Rules for the shared hook:
 - The event carries everything a subscriber needs: the injected flag, the
   extended-key flag (for key names and keypad Enter), Alt, and
   `dwExtraInfo`. Each feature filters for itself: the keystroke overlay
-  drops injected keys, a switcher may want them. Onyx's first `KeyEvent`
-  lacked `Extended` and `ExtraInfo`, and two features had to work around
-  it.
+  drops injected keys, a switcher may want them. A first version without
+  `Extended` and `ExtraInfo` pushed two features into workarounds.
 - Expose a subscriber count, so a feature's self-test can check that its
   own subscription went away while others still listen.
 - Other one-per-process jobs follow the same rule: a feature that needs a

@@ -2,7 +2,7 @@
 
 Windows that sit over other apps: frozen screens, pickers, panels, key
 caps, a cursor halo, toasts that stay out of recordings. Each shape ran in
-Onyx for Windows (a tray suite built with BAWA) on Windows 11 build 26200,
+a tray suite built with BAWA on Windows 11 build 26200,
 one display at 125 percent. Multi-display and mixed-DPI setups were not
 tested there.
 

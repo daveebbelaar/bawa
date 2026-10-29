@@ -26,7 +26,7 @@ before any feature, with one real feature in it as the worked example.
 The feature contract (C#):
 
 ```csharp
-public sealed record OnyxAction(string Id, string Title, int Glyph, KeyCombo? DefaultCombo,
+public sealed record AppAction(string Id, string Title, int Glyph, KeyCombo? DefaultCombo,
     Func<Task> Run, Func<bool>? IsOn = null);
 public sealed record SelfTestCheck(string Name, Func<Task<(bool Ok, string Detail)>> Run);
 public sealed record SnapshotSurface(string Name, Func<Task<Window?>> Open, Action Close);
@@ -39,7 +39,7 @@ public interface IFeature
     string Summary { get; }
     string? Replaces { get; }
     int Order { get; }
-    IReadOnlyList<OnyxAction> Actions { get; }   // build once, cache
+    IReadOnlyList<AppAction> Actions { get; }   // build once, cache
     Type? SettingsPage { get; }                  // gets the feature as the navigation parameter
     UIElement? CreateFlyoutBlock();
     void Start();                  // hooks, timers, watchers
@@ -112,7 +112,7 @@ feature loaded. Problems only a merge shows:
 ## 5. Check the whole
 
 On a quiet desktop: the full self-test, every unit test, every snapshot in
-light and dark, both grid checks. Onyx for Windows at this point: 12
+light and dark, both grid checks. The suite this guide came from, at this point: 12
 features, 170 self-test checks, 439 unit tests, 88 snapshots, all passing,
 built by six agents in about 40 minutes of wall time.
 

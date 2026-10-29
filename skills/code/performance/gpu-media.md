@@ -4,7 +4,7 @@ For apps that capture, decode, process, or encode video, audio, or large
 images. Each recipe: symptom, cause, fix. The lessons come from BAMA's
 measured media apps on the Mac; the APIs here are their Windows
 counterparts. The zero-copy, device, and screen recording parts ran in
-Onyx for Windows's recorder on Windows 11 build 26200. Measure your own
+a recorder built with BAWA, on Windows 11 build 26200. Measure your own
 numbers on Windows before you trust any gain.
 
 ## Contents
@@ -42,7 +42,7 @@ copies and conversions.
 **Cause:** each frame copied to the CPU (`SoftwareBitmap.CreateCopyFromSurfaceAsync`)
 or converted between pixel formats on the CPU.
 **Fix:** keep the frame as a texture and process it on the GPU. This is
-the shape Onyx's recorder ran, with a vtable call instead of a COM
+the shape that recorder ran, with a vtable call instead of a COM
 interface declaration:
 
 ```csharp
@@ -95,7 +95,7 @@ Foundation's threads.
 **Fix:** one device for the app's lifetime that keeps both pointers, with
 `ID3D10Multithread.SetMultithreadProtected(TRUE)` (slot 5) right after
 `D3D11CreateDevice`, and a `Lock` around every use of the immediate
-context. The vtable slots Onyx used, no package needed:
+context. The vtable slots that worked, no package needed:
 `ID3D11Device` 5 `CreateTexture2D`, 9 `CreateRenderTargetView`;
 `ID3D11DeviceContext` 46 `CopySubresourceRegion`, 47 `CopyResource`, 50
 `ClearRenderTargetView`. Wrap your own texture for WinRT through
@@ -146,7 +146,7 @@ Use `Direct3D11CaptureFramePool.CreateFreeThreaded`, so `FrameArrived`
 runs on a worker thread and not on the UI thread.
 
 A plain GPU copy into a texture of your own is cheap enough to do in the
-callback. Onyx's recorder copies each frame there (two pool buffers, the
+callback. That recorder copies each frame there (two pool buffers, the
 frame disposed at once) and recorded a window that changed on every
 refresh at 30 fps with none dropped.
 
@@ -231,7 +231,7 @@ code is in the os-integrations skill's
   CreateAlways)`. No `StorageFile`, works unpackaged.
 - Frame rate: `GraphicsCaptureSession.MinUpdateInterval` (Windows 11
   24H2 and later) at 90 percent of the frame time. At exactly 1/fps on a
-  60 Hz display, Onyx measured 26 fps for a 30 fps setting; at 90
+  60 Hz display, one build measured 26 fps for a 30 fps setting; at 90
   percent, 30.1. Older builds send frames at the display rate; drop the
   extra ones by timestamp.
 - Time: `Direct3D11CaptureFrame.SystemRelativeTime` is QPC. Movie time is
@@ -242,7 +242,7 @@ code is in the os-integrations skill's
   time, or the movie is short: a 2 s still recording had 1 frame.
 - Prepare takes about 0.3 s after `StartCapture`, and the movie starts at
   the first frame.
-- Stopping waits for the MP4 index (Onyx allowed 5 s). A synchronous quit
+- Stopping waits for the MP4 index (5 s was enough). A synchronous quit
   loses a running recording.
 
 ## Overlays and filters

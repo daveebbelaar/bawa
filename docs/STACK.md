@@ -47,7 +47,7 @@ knows web UI.
 
 ## What real Windows apps use
 
-- **PowerToys** (the model for Onyx-for-Windows):
+- **PowerToys** (the model for a tray suite):
   - The runner, `PowerToys.exe`, is C++. It loads each utility as a module
     DLL behind one C++ interface, owns the tray icon, and talks to the
     Settings app over a two-way named pipe with JSON messages [18][19].

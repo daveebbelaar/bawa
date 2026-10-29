@@ -1,4 +1,4 @@
-﻿# Performance recipes
+# Performance recipes
 
 Each recipe names the symptom, the cause, and the fix. The code compiled
 in a template app; the watchdog, the frame probe, and the startup numbers
@@ -261,7 +261,7 @@ image.Source = source;
       { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "Stats sampler" };
   ```
 
-  The same thread keeps a PDH query on one thread. Onyx's sampler read
+  The same thread keeps a PDH query on one thread. One sampler read
   every stat in about 10 ms (Debug build), so a 2 s interval cost about
   0.5 percent of one core while something showed the numbers, and
   nothing while nothing did. Start the thread only while a flyout, page,

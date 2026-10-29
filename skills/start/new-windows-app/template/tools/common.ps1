@@ -1,4 +1,4 @@
-﻿# Shared by the tools: where the installed app lives, and a way to run it that never hangs.
+# Shared by the tools: where the installed app lives, and a way to run it that never hangs.
 # Dot-source it: . "$PSScriptRoot\common.ps1"
 $AppName = '__APP_NAME__'
 # APP_EXE runs another build: a publish folder, or a worktree's Debug build.
@@ -26,7 +26,7 @@ function Invoke-App {
         $null = $process.Handle   # without this, ExitCode is empty after the process ends
         $finished = $process.WaitForExit($TimeoutSec * 1000)
         if (-not $finished) { Stop-Process -Id $process.Id -Force }
-        # The app writes UTF-8; Windows PowerShell 5.1 would read it as the ANSI code page ("Readingâ€¦").
+        # The app writes UTF-8; Windows PowerShell 5.1 would read it as the ANSI code page and garble every non-ASCII character.
         Get-Content $log -Encoding UTF8 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
         if (-not $finished) { Write-Host "TIMEOUT after $TimeoutSec s"; return 1 }
         if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 1) {

@@ -1,7 +1,7 @@
 # Capture recipes
 
 Screenshots, pickers, recordings, and live previews. The order that
-worked in Onyx for Windows (Windows 11 build 26200, one 1920 x 1200
+worked in a tray suite built with BAWA (Windows 11 build 26200, one 1920 x 1200
 display at 125 percent): freeze the screen with GDI first, show the
 picker over the frozen image, and use `Windows.Graphics.Capture` only for
 one window or a recording. The window grab and the capture border state
@@ -153,7 +153,7 @@ A `Windows.Graphics.Capture` session feeds a `MediaStreamSource` that
 `MediaTranscoder` encodes to H.264. Three threads, none of them the UI
 thread: capture (`FrameArrived` on a free-threaded pool), Media
 Foundation (`SampleRequested`), and the transcode task. This worked first
-time in Onyx, at 30 fps with none dropped for a window that changed on
+time in that suite, at 30 fps with none dropped for a window that changed on
 every refresh.
 
 The device: one for the app's lifetime, and unlike the screenshot
@@ -502,7 +502,7 @@ Gotchas:
   unique name. A 0-byte file means the encoder failed: delete it.
 - Keep the recording capsule out of the video with
   `WDA_EXCLUDEFROMCAPTURE` ([overlays.md](overlays.md)).
-- Not done in Onyx: system audio and the microphone. Those need WASAPI
+- Not built yet: system audio and the microphone. Those need WASAPI
   loopback and capture, resampling to 48 kHz, silence fill, and a second
   stream in the `MediaStreamSource`. A safe self-test is hard: loopback
   records whatever the person plays.
@@ -563,12 +563,12 @@ DwmUnregisterThumbnail(thumbnail);
 
 Gotchas:
 
-- Confirmed in Onyx: XAML position times `XamlRoot.RasterizationScale`
+- Confirmed on Windows 11: XAML position times `XamlRoot.RasterizationScale`
   lands the thumbnail exactly on the tile.
 - Thumbnails draw over your XAML, not inside it. Place them again after
   every layout change and scroll, and once more at low dispatcher
   priority after the panel opens.
-- Register only the tiles fully in view, with a cap (Onyx used 24), and
+- Register only the tiles fully in view, with a cap (24 worked), and
   unregister all on hide.
 - Skip your own window and handles that are gone (`IsWindow`).
 - `PrintWindow(PW_RENDERFULLCONTENT)` captures DWM thumbnails, so snapshot
@@ -597,7 +597,7 @@ hotkey, and never asks for borderless capture.
   (`OriginalDuration`, and `GetVideoEncodingProperties()` for the subtype,
   width, and height), and `MediaComposition.GetThumbnailAsync` for frames
   to compare. Works unpackaged.
-- Checks that held in Onyx: the MP4 exists, is H.264, has the window's
+- Checks that held: the MP4 exists, is H.264, has the window's
   visible size, its duration is within 30 percent of the recording,
   frames change, and the capsule is excluded. A still window for 2 s
   still gives a movie of the right length.

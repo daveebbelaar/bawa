@@ -3,7 +3,7 @@
 Reading what the rest of Windows knows: other apps' windows, their icons,
 the search index, another app's focused control, the power manager, and
 the process table. Plus tray icons drawn per sample. Each shape ran in
-Onyx for Windows (a tray suite built with BAWA) on Windows 11 build
+a tray suite built with BAWA on Windows 11 build
 26200, unless a line says otherwise.
 
 ## Contents
@@ -170,7 +170,7 @@ Gotchas:
 - `GetIconInfo` returns two new bitmaps. Delete both, and destroy the
   icon, or GDI objects leak until the 10,000 limit.
 - Cache by path on the UI thread, as a `Task<ImageSource?>`, with a cap
-  (Onyx cleared past 150). Show a glyph when the result is null.
+  (clear it past 150). Show a glyph when the result is null.
 - Packaged apps from `PackageManager.FindPackagesForUser("")` (it works
   unpackaged, about 1 s, so load it in the background) open with
   `shell:AppsFolder\<AUMID>` through `Process.Start` with
@@ -179,7 +179,7 @@ Gotchas:
 ## Windows Search
 
 File names from the Windows Search index through its OLE DB provider.
-Add the `System.Data.OleDb` package (10.0.0 in Onyx). Only indexed
+Add the `System.Data.OleDb` package (10.0.0 was tested). Only indexed
 folders ever show up.
 
 ```csharp
@@ -231,16 +231,16 @@ public static class FileSearch
 Gotchas:
 
 - `CONTAINS(System.FileName, '"word*"')` matches word prefixes, not
-  substrings. For "newest files with these extensions", Onyx used
+  substrings. For "newest files with these extensions", one build used
   `System.FileExtension = '.cs' OR ...` with
   `System.FileName LIKE '%word%'` and `ORDER BY System.DateModified DESC`.
 - Show instant rows (apps) first, and file rows when the query returns
-  (Onyx: 80 ms later). Tag each query with a generation number and drop
+  (80 ms worked). Tag each query with a generation number and drop
   results from an older one.
 - A self-test cannot depend on the index (it may not contain `%TEMP%`, or
   the service may be off). Make the query a delegate and fake it. Test the
   SQL builder with unit tests.
-- Manual check left in Onyx: files appearing within about 150 ms, and
+- Still a manual check: files appearing within about 150 ms, and
   the service stopped.
 
 ## Per-sample tray icons
@@ -329,7 +329,7 @@ Gotchas:
   in the overflow): a cheap "is it there" check.
 - Each new icon lands in the overflow. In a suite whose main icon already
   shows every number in its flyout, leave these off by default.
-- Not verified in Onyx: the real `NIM_ADD` of these icons never ran
+- Not verified: the real `NIM_ADD` of these icons never ran
   (test runs must not add icons). The painting, 100 redraws with flat GDI
   and USER object counts, and the add, remove, and redraw decisions were
   tested. Turning the icons on in the installed build is a manual check.
@@ -420,11 +420,11 @@ Gotchas:
 
 - An out-of-context WinEvent hook calls back on the thread that set it,
   through its message loop. Set it on the UI thread.
-- Run the hook only while the answer matters (Onyx: only in "All keys"
+- Run the hook only while the answer matters (for example only in "All keys"
   mode).
 - Other properties work the same way: look up the property id and read
   the `VARIANT` type at offset 0 and the value at offset 8.
-- Manual check left in Onyx: the Edge password field.
+- Still a manual check: the Edge password field.
 
 ## Power requests
 
@@ -486,7 +486,7 @@ internal sealed partial class KeepAwake : IDisposable
 Gotchas:
 
 - `powercfg /requests` needs an admin terminal. `CallNtPowerInformation`
-  needs none: Onyx's self-test logged 0x0 before, 0x3 while on, and 0x0
+  needs none: one self-test logged 0x0 before, 0x3 while on, and 0x0
   after.
 - The state is system-wide. During another test run's snapshots it read
   0x3 before, during, and after, because snapshot mode held
@@ -496,7 +496,7 @@ Gotchas:
 - A timed session ends with a one-shot `DispatcherQueueTimer`; the
   feature's `Stop` releases the request.
 - Name the reason after the app the person installed. Inside a suite it
-  is the suite's name ("Onyx Keep awake"), not the feature's.
+  is the suite's name ("<App> Keep awake"), not the feature's.
 
 ## Ports and command lines
 

@@ -4,9 +4,8 @@ Short, working shapes for a WinUI 3 unpackaged app made from the BAWA
 template. Every block compiled in a template app, and the hotkey, tray
 icon, window move, keyboard hook, capture, single instance, and debug
 bridge recipes ran on Windows 11. The clipboard, paste, keyboard hook,
-and window capture shapes were revised from Onyx for Windows, a
-twelve-feature tray suite built with BAWA, where they ran on Windows 11
-build 26200.
+and window capture shapes were revised while building a twelve-feature
+tray suite with BAWA, where they ran on Windows 11 build 26200.
 
 The template enables `AllowUnsafeBlocks` and keeps its Win32 calls in
 `UI/Win32.cs` (`Win32.RECT`, `GetWindowRect`, `DwmGetWindowAttribute`,
@@ -833,7 +832,7 @@ Gotchas:
   a history database is a security bug.
 - To keep a write out of cloud clipboard sync too, add a
   `CanUploadToCloudClipboard` format with a DWORD 0. This is from
-  Microsoft's clipboard docs, from memory; Onyx did not use it.
+  Microsoft's clipboard docs, from memory; not tested.
 - Read only what you keep, in one order: files (`CF_HDROP`, through
   `DragQueryFileW`), then text that is not only whitespace, then `PNG`,
   then `CF_DIBV5`, then `CF_DIB`. Excel and Word put text and a picture of
@@ -874,7 +873,7 @@ internal static partial class Paste
 {
     /// Marks every event this app sends, so a hook (its own, or the shared one in a suite)
     /// can tell them from other synthetic input.
-    public const nuint Marker = 0x4F4E5958;   // "ONYX"
+    public const nuint Marker = 0x42415741;   // any constant unique to your app ("BAWA")
     private const ushort VK_BACK = 0x08, VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_MENU = 0x12, V = 0x56, VK_LWIN = 0x5B, VK_RWIN = 0x5C;
 
     /// False when the keys were not sent: the clipboard holds the text, so say "press Ctrl+V".
@@ -1071,7 +1070,7 @@ Gotchas:
   layout), and require Alt without Ctrl or Win.
 - Swallowing Alt+key and then releasing Alt opens the menu bar of the
   window behind. Sending one press of the unassigned key 0xE8 while Alt
-  is down stops it (the AutoHotkey trick). Onyx's switcher does this; the
+  is down stops it (the AutoHotkey trick). The window-switcher spec does this; the
   menu bar check stayed manual.
 - `GetAsyncKeyState` in the callback is fine for Shift, Ctrl, and Win;
   only the current key's own state lags.
@@ -1127,7 +1126,7 @@ internal static class CaptureBorder
 }
 ```
 
-On the PC that built Onyx (Windows 11 26200, unpackaged),
+On one Windows 11 PC (build 26200, unpackaged),
 `CheckAccess` returned `Allowed` with no prompt and no package
 capability. The `RequestAccessAsync` prompt was never seen.
 

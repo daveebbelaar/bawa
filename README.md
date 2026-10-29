@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
@@ -19,17 +19,28 @@ C# and WinUI 3. Local data. No Visual Studio.
 [![Codex plugin](https://img.shields.io/badge/Codex-plugin-10A37F?style=flat-square)](#install)
 [![MIT license](https://img.shields.io/badge/license-MIT-F4C430?style=flat-square)](LICENSE)
 
-**[Quick start](#quick-start) Â· [How it works](#how-it-works) Â· [Skills](#skills) Â· [Specs](#specs) Â· [Install](#install)**
+**[Quick start](#quick-start) · [How it works](#how-it-works) · [Skills](#skills) · [Specs](#specs) · [Install](#install)**
+
+**On a Mac? Use [BAMA: Build Any Mac App](https://github.com/daveebbelaar/bama) instead.**
 
 </div>
 
 ## Quick start
 
-```bash
-npx skills@latest add daveebbelaar/bawa
+Install BAWA as a Claude Code plugin. In Claude Code, run:
+
+```text
+/plugin marketplace add daveebbelaar/bawa
+/plugin install bawa@bawa
 ```
 
-Then ask your agent:
+Then install the one build tool BAWA needs, the .NET SDK, and open a new terminal:
+
+```powershell
+winget install Microsoft.DotNet.SDK.10
+```
+
+Then ask Claude:
 
 ```text
 Clone my to-do app as a native Windows app.
@@ -38,7 +49,7 @@ Screenshot every screen, write the user stories, and build milestone 1.
 
 Not sure where to start? Type `/bawa`. It looks at your project and picks the next skill.
 
-On a Mac? BAWA's sibling is [BAMA: Build Any Mac App](https://github.com/daveebbelaar/bama). Same pipeline, same skill names, Swift and SwiftUI.
+BAWA is the Windows sibling of [BAMA](https://github.com/daveebbelaar/bama): the same pipeline and skill names, built for C# and WinUI instead of Swift and SwiftUI.
 
 ## How it works
 
@@ -173,6 +184,7 @@ bawa/scripts/link-skills.ps1      # links every skill into ~/.claude/skills and 
 
 - Windows 11 (Windows 10 version 2004 or later runs the apps, without Mica)
 - The .NET 10 SDK: `winget install Microsoft.DotNet.SDK.10`. Nothing else to build and run: no Visual Studio, no Windows App SDK installer
+- PowerShell allowed to run local scripts. Windows blocks `.ps1` files by default; if `./build.ps1` says "running scripts is disabled", run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once (or turn on "PowerShell" in Settings > System > For developers). Claude Code's own PowerShell tool is not affected
 - To ship: `tools/publish.ps1` makes a build that needs nothing on the other PC. Its faster NativeAOT option also needs the MSVC linker from Visual Studio Build Tools (the `distribute` skill has the one-line install)
 - An agent that supports skills: Claude Code, Codex, Cursor, Gemini CLI
 - For `clone` on native apps: computer use in the Claude desktop app

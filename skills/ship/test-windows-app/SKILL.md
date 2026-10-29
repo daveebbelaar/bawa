@@ -117,7 +117,7 @@ front: that is the person's window.
 ### Self-tests that never touch the person's PC
 
 A self-test runs the real code on a real desktop. These patterns kept
-twelve features' tests safe in Onyx:
+twelve features' tests safe in one suite:
 
 - **Test windows of your own**, opened and closed by the check, for
   anything that moves, captures, types into, or reads a window. Paint
@@ -152,7 +152,7 @@ worktree), their test windows fight for the foreground. Checks that read
 - Turn off "hide on deactivate" for a panel during its checks.
 - Treat a lone foreground failure while other agents run as unproven, and
   run the full self-test again once the desktop is quiet before you call
-  it a bug. In Onyx, two launcher checks failed with six agents running
+  it a bug. In one suite build, two launcher checks failed with six agents running
   and passed alone.
 - Give each checkout its own build folder, test store, and snapshot
   folder (the template names them after the checkout folder), and run
