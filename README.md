@@ -123,17 +123,6 @@ Not sure what to build? [specs/](specs/) has 12 build plans for small Windows ap
 Build the app in window-snapper.md with BAWA.
 ```
 
-## Built with BAWA
-
-[examples/Snap](examples/Snap) is the window snapper spec, built end to end by an agent with BAWA on a Windows 11 laptop. It snaps the front window to halves, wide sides, and other displays with Ctrl+Alt shortcuts, lives in the tray, and opens at sign-in. Its self-test opens a window of its own, snaps it with every command, and measures where it landed (22 checks), next to 22 unit tests.
-
-**Onyx for Windows** is all twelve specs as one tray app, like PowerToys: a shell with a feature contract, then six agents building two features each in their own git worktrees, then a merge. The merged app passes 170 self-test checks and 439 unit tests, and everything the agents tripped over is folded back into the skills. The guide: [suite.md](skills/start/new-windows-app/suite.md).
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/snap-dark.png">
-  <img alt="Snap's Shortcuts page, built with BAWA" src="docs/assets/snap-light.png" width="640">
-</picture>
-
 ## Install
 
 Pick one route per agent. Two routes install every skill twice.
