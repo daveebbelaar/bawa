@@ -53,8 +53,6 @@ app, or the build in `APP_EXE`.
 - `specs/<app>.md`: build plans for small apps, the Windows versions of
   BAMA's specs. Each has Brief, How it works, Stories, Gotchas, and a
   "Done when" line, in that order. `specs/README.md` lists them.
-- `examples/`: apps built with BAWA from a spec, kept as proof that the
-  pipeline works on a real Windows PC.
 
 ## Writing skills
 

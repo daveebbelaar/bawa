@@ -1,9 +1,0 @@
-<Project>
-  <PropertyGroup>
-    <!-- Build products live outside the repo (and outside OneDrive, which would try to sync them). -->
-    <ArtifactsPath>$(LOCALAPPDATA)\Dev\Snap\artifacts</ArtifactsPath>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
-</Project>

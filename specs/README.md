@@ -43,9 +43,7 @@ want. A spec is a starting point, not a contract.
 | [dev-toolkit.md](dev-toolkit.md) | Open projects, transform text (JSON, Base64, JWT), free a port | DevToys, `netstat` then `taskkill` |
 
 Start with the window snapper. It's the smallest, and it teaches the two
-things most of these apps need: a global shortcut and a tray icon. It is
-also the one BAWA has already built end to end on a real PC: see
-[../examples/Snap](../examples/Snap).
+things most of these apps need: a global shortcut and a tray icon.
 
 ## Build several specs as one app
 

@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <!-- Layout math and shortcut rules with no WinUI and no Win32, so tests run without a screen. -->
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>Snap.Core</RootNamespace>
-  </PropertyGroup>
-</Project>
