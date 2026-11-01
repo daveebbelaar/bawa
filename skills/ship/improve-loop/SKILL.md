@@ -1,4 +1,4 @@
-﻿---
+---
 name: improve-loop
 description: Autonomous loop that works through docs/STORIES.md one story at a time for a Windows app, building, snapshotting, comparing against reference screenshots, fixing, and committing, until a milestone is done. Use when the user says "keep going", "work through the backlog", "make it match the reference", or wants an unattended improvement loop.
 argument-hint: "[milestone, e.g. M1]"

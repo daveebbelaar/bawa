@@ -7,36 +7,38 @@
 
     <!-- One card per command: its layout glyph, its name, and its shortcut. Cards are built in code. -->
     <ScrollViewer>
-        <StackPanel
-            MaxWidth="{StaticResource ContentMaxWidth}"
-            Padding="{StaticResource PageMargin}"
-            ui:GridArea.Name="page"
-            ui:GridArea.Inset="{StaticResource SpaceXxl}">
+        <Grid>
             <StackPanel
-                Margin="{StaticResource PageHeaderMargin}"
-                Spacing="{StaticResource SpaceSm}"
-                ui:GridProbe.Area="page"
-                ui:GridProbe.Name="header">
-                <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Shortcuts" />
-                <TextBlock
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="Press a shortcut in any app to move its window. Select a shortcut to change it."
-                    TextWrapping="Wrap" />
+                MaxWidth="{StaticResource ContentMaxWidth}"
+                Padding="{StaticResource PageMargin}"
+                ui:GridArea.Name="page"
+                ui:GridArea.Inset="{StaticResource SpaceXxl}">
+                <StackPanel
+                    Margin="{StaticResource PageHeaderMargin}"
+                    Spacing="{StaticResource SpaceSm}"
+                    ui:GridProbe.Area="page"
+                    ui:GridProbe.Name="header">
+                    <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Shortcuts" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Press a shortcut in any app to move its window. Select a shortcut to change it."
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <InfoBar
+                    x:Name="FailedBar"
+                    Margin="0,0,0,16"
+                    IsClosable="False"
+                    Severity="Warning"
+                    Title="Some shortcuts don't work"
+                    Message="Another app or a graphics driver uses them. Select one to pick another combo." />
+
+                <StackPanel
+                    x:Name="Cards"
+                    Spacing="{StaticResource SpaceXs}"
+                    ui:GridProbe.Area="page"
+                    ui:GridProbe.Name="cards" />
             </StackPanel>
-
-            <InfoBar
-                x:Name="FailedBar"
-                Margin="0,0,0,16"
-                IsClosable="False"
-                Severity="Warning"
-                Title="Some shortcuts don't work"
-                Message="Another app or a graphics driver uses them. Select one to pick another combo." />
-
-            <StackPanel
-                x:Name="Cards"
-                Spacing="{StaticResource SpaceXs}"
-                ui:GridProbe.Area="page"
-                ui:GridProbe.Name="cards" />
-        </StackPanel>
+        </Grid>
     </ScrollViewer>
 </Page>

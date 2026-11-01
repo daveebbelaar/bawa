@@ -8,68 +8,70 @@
 
     <!-- Looks like Windows Settings: a title, group headers, and one card per setting. -->
     <ScrollViewer>
-        <StackPanel
-            MaxWidth="{StaticResource ContentMaxWidth}"
-            Padding="{StaticResource PageMargin}"
-            ui:GridArea.Name="page"
-            ui:GridArea.Inset="{StaticResource SpaceXxl}">
-            <TextBlock
-                Margin="{StaticResource PageHeaderMargin}"
-                Style="{StaticResource TitleTextBlockStyle}"
-                Text="General"
-                ui:GridProbe.Area="page"
-                ui:GridProbe.Name="title" />
+        <Grid>
+            <StackPanel
+                MaxWidth="{StaticResource ContentMaxWidth}"
+                Padding="{StaticResource PageMargin}"
+                ui:GridArea.Name="page"
+                ui:GridArea.Inset="{StaticResource SpaceXxl}">
+                <TextBlock
+                    Margin="{StaticResource PageHeaderMargin}"
+                    Style="{StaticResource TitleTextBlockStyle}"
+                    Text="General"
+                    ui:GridProbe.Area="page"
+                    ui:GridProbe.Name="title" />
 
-            <TextBlock
-                Margin="0,0,0,8"
-                Style="{StaticResource BodyStrongTextBlockStyle}"
-                Text="Startup"
-                ui:GridProbe.Area="page"
-                ui:GridProbe.Name="startup" />
-            <toolkit:SettingsCard
-                Description="Snap starts in the tray when you sign in to Windows."
-                Header="Open at sign-in"
-                ui:GridProbe.Area="page"
-                ui:GridProbe.Name="startup-card">
-                <toolkit:SettingsCard.HeaderIcon>
-                    <FontIcon Glyph="&#xE7E8;" />
-                </toolkit:SettingsCard.HeaderIcon>
-                <ToggleSwitch x:Name="LoginSwitch" Toggled="OnLoginToggled" />
-            </toolkit:SettingsCard>
-
-            <TextBlock
-                Margin="{StaticResource GroupHeaderMargin}"
-                Style="{StaticResource BodyStrongTextBlockStyle}"
-                Text="Appearance"
-                ui:GridProbe.Area="page"
-                ui:GridProbe.Name="appearance" />
-            <StackPanel Spacing="{StaticResource SpaceXs}" ui:GridProbe.Area="page" ui:GridProbe.Name="appearance-cards">
-                <toolkit:SettingsCard Description="Light, dark, or follow Windows." Header="App theme">
+                <TextBlock
+                    Margin="0,0,0,8"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Startup"
+                    ui:GridProbe.Area="page"
+                    ui:GridProbe.Name="startup" />
+                <toolkit:SettingsCard
+                    Description="Snap starts in the tray when you sign in to Windows."
+                    Header="Open at sign-in"
+                    ui:GridProbe.Area="page"
+                    ui:GridProbe.Name="startup-card">
                     <toolkit:SettingsCard.HeaderIcon>
-                        <FontIcon Glyph="&#xE793;" />
+                        <FontIcon Glyph="&#xE7E8;" />
                     </toolkit:SettingsCard.HeaderIcon>
-                    <ComboBox x:Name="ThemeBox" MinWidth="200" SelectionChanged="OnThemeChanged" />
+                    <ToggleSwitch x:Name="LoginSwitch" Toggled="OnLoginToggled" />
                 </toolkit:SettingsCard>
-                <toolkit:SettingsCard Description="Buttons, selection, and switches use this color." Header="Accent color">
+
+                <TextBlock
+                    Margin="{StaticResource GroupHeaderMargin}"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Appearance"
+                    ui:GridProbe.Area="page"
+                    ui:GridProbe.Name="appearance" />
+                <StackPanel Spacing="{StaticResource SpaceXs}" ui:GridProbe.Area="page" ui:GridProbe.Name="appearance-cards">
+                    <toolkit:SettingsCard Description="Light, dark, or follow Windows." Header="App theme">
+                        <toolkit:SettingsCard.HeaderIcon>
+                            <FontIcon Glyph="&#xE793;" />
+                        </toolkit:SettingsCard.HeaderIcon>
+                        <ComboBox x:Name="ThemeBox" MinWidth="200" SelectionChanged="OnThemeChanged" />
+                    </toolkit:SettingsCard>
+                    <toolkit:SettingsCard Description="Buttons, selection, and switches use this color." Header="Accent color">
+                        <toolkit:SettingsCard.HeaderIcon>
+                            <FontIcon Glyph="&#xE790;" />
+                        </toolkit:SettingsCard.HeaderIcon>
+                        <ComboBox x:Name="AccentBox" MinWidth="200" SelectionChanged="OnAccentChanged" />
+                    </toolkit:SettingsCard>
+                </StackPanel>
+
+                <TextBlock
+                    Margin="{StaticResource GroupHeaderMargin}"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="About"
+                    ui:GridProbe.Area="page"
+                    ui:GridProbe.Name="about" />
+                <toolkit:SettingsCard x:Name="AboutCard" Header="Snap" ui:GridProbe.Area="page" ui:GridProbe.Name="about-card">
                     <toolkit:SettingsCard.HeaderIcon>
-                        <FontIcon Glyph="&#xE790;" />
+                        <ImageIcon Source="ms-appx:///Assets/AppIcon.png" />
                     </toolkit:SettingsCard.HeaderIcon>
-                    <ComboBox x:Name="AccentBox" MinWidth="200" SelectionChanged="OnAccentChanged" />
+                    <Button Click="OnQuit" Content="Exit Snap" />
                 </toolkit:SettingsCard>
             </StackPanel>
-
-            <TextBlock
-                Margin="{StaticResource GroupHeaderMargin}"
-                Style="{StaticResource BodyStrongTextBlockStyle}"
-                Text="About"
-                ui:GridProbe.Area="page"
-                ui:GridProbe.Name="about" />
-            <toolkit:SettingsCard x:Name="AboutCard" Header="Snap" ui:GridProbe.Area="page" ui:GridProbe.Name="about-card">
-                <toolkit:SettingsCard.HeaderIcon>
-                    <ImageIcon Source="ms-appx:///Assets/AppIcon.png" />
-                </toolkit:SettingsCard.HeaderIcon>
-                <Button Click="OnQuit" Content="Exit Snap" />
-            </toolkit:SettingsCard>
-        </StackPanel>
+        </Grid>
     </ScrollViewer>
 </Page>

@@ -1,4 +1,4 @@
-﻿# Window snapper
+# Window snapper
 
 Snap the front window to the left or right half, a wide side, or full screen with a keyboard shortcut, and move it to the next display. Replaces: Rectangle-style snapping on top of Windows' own Snap layouts, and the snapping part of PowerToys FancyZones. Ported from BAMA's window-snapper spec.
 

@@ -1,4 +1,4 @@
-﻿# __APP_NAME__
+# __APP_NAME__
 
 A native Windows app in WinUI 3. It runs on this PC only, with a local
 SQLite database and no server.

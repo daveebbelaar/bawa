@@ -1,4 +1,4 @@
-﻿# BAWA
+# BAWA
 
 Agent skills for building native Windows apps. Installed as a Claude Code and
 Codex plugin from `.claude-plugin/`, or through `npx skills add`.

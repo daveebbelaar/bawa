@@ -1,4 +1,4 @@
-﻿---
+---
 name: windows-design
 description: Design rules that make a WinUI 3 app look and feel like a native Windows 11 app, from the Fluent design principles to Mica, the title bar, navigation, command bars, menus, keyboard, type, color, and dark mode. Use when building or reviewing any window, page, command bar, menu, flyout, dialog, or settings page, or when the user asks for a more native, Windows-like, or better designed app.
 ---

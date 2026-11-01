@@ -1,4 +1,4 @@
-﻿# Snap
+# Snap
 
 A tray app that moves and resizes the front window with keyboard shortcuts, for anyone who wants Rectangle's exact halves and wide sides on Windows.
 

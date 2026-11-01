@@ -1,4 +1,4 @@
-﻿---
+---
 name: csharp-winui
 description: C# 14 and WinUI 3 code rules for Windows apps, including threading, x:Bind, observable models, SQLite, Win32 interop, and fixes for common build and launch errors. Use when writing, reviewing, or debugging C# or XAML in a WinUI app, or on XamlParseException, 0xC000027B crashes, binding, or threading errors.
 ---

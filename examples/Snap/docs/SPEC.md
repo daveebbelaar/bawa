@@ -56,7 +56,7 @@ Native Windows 11, Windows accent. Settings looks like Windows Settings: one car
 | Launch at login | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` | None |
 | Failure sound | `MessageBeep(MB_OK)` | None |
 
-Recipes: [global hotkey](../skills/code/os-integrations/recipes.md#global-hotkey-registerhotkey), [move a window](../skills/code/os-integrations/recipes.md#move-a-window), [tray icon](../skills/code/os-integrations/recipes.md#tray-icon), [launch at login](../skills/code/os-integrations/recipes.md#launch-at-login), [single instance](../skills/code/os-integrations/recipes.md#single-instance), [elevation](../skills/code/os-integrations/recipes.md#elevation-and-uipi).
+Recipes: [global hotkey](../../../skills/code/os-integrations/recipes.md#global-hotkey-registerhotkey), [move a window](../../../skills/code/os-integrations/recipes.md#move-a-window), [tray icon](../../../skills/code/os-integrations/recipes.md#tray-icon), [launch at login](../../../skills/code/os-integrations/recipes.md#launch-at-login), [single instance](../../../skills/code/os-integrations/recipes.md#single-instance), [elevation](../../../skills/code/os-integrations/recipes.md#elevation-and-uipi).
 
 Main types:
 

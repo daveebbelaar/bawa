@@ -1,4 +1,4 @@
-﻿---
+---
 name: build-and-verify
 description: Build a WinUI 3 app from the command line, install it, and check light and dark window snapshots of every page before calling a change done. Use after any UI code change, when a build fails, or when the user asks to run, screenshot, or check the app.
 allowed-tools: PowerShell(./build.ps1*) PowerShell(tools/*) PowerShell(dotnet *) Bash(dotnet *) Read

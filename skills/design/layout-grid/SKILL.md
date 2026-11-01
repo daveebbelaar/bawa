@@ -127,6 +127,7 @@ each probe in pink with its name. Open them with the Read tool.
 | gap 29.2 epx between a title and a list | the probe sits on centered text | probe the row that holds the text |
 | not inside its 36 epx inset | a missing `PageMargin`, or a fixed width wider than the parent | `Padding="{StaticResource PageMargin}"`, `MaxWidth` instead of `Width` |
 | overlap | a `TranslateTransform`, `Canvas.Left`, or a fixed height | remove it, let the panel size the view |
+| ScrollViewer's child sets MaxWidth | the page column sits straight in the `ScrollViewer`, which places it by its desired width: maximized, it slides off the right edge | a `<Grid>` between the `ScrollViewer` and the column |
 | between physical pixels | a fractional number, or `UseLayoutRounding="False"` | a whole number from `Space`, layout rounding on |
 
 Done when `tools/grid-lint.ps1` passes, `tools/check-layout.ps1` passes on

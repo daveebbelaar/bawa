@@ -1,4 +1,4 @@
-﻿---
+---
 name: bawa
 description: Build any Windows app. Start here to pick the next skill for a native Windows app.
 disable-model-invocation: true

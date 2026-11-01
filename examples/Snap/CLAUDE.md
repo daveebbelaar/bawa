@@ -1,4 +1,4 @@
-﻿# Snap
+# Snap
 
 A tray app in WinUI 3 that snaps the front window to halves, wide sides,
 and other displays with global shortcuts. Settings live in

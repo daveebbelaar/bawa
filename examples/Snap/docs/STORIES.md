@@ -1,4 +1,4 @@
-﻿# Stories
+# Stories
 
 ## M1 Core loop
 

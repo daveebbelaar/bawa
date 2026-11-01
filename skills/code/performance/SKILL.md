@@ -1,4 +1,4 @@
-﻿---
+---
 name: performance
 description: Make a Windows app fast by measuring hangs, stutter, CPU, memory, and startup, then moving work off the UI thread and onto the GPU. Use when the app freezes or shows "Not responding", a shortcut feels slow, scrolling or dragging stutters, the fan spins, memory grows, or the user asks to optimize or profile.
 ---

@@ -1,4 +1,4 @@
-﻿---
+---
 name: new-windows-app
 description: Create a native Windows app in WinUI 3 from a working template (C# and .NET 10, SQLite, build script, icon script, snapshot mode, self-test, git), with no Visual Studio. Use when the user wants to start a new Windows app or scaffold a WinUI project.
 argument-hint: "<AppName> [parent-folder]"

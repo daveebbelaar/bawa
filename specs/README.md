@@ -1,4 +1,4 @@
-﻿# Specs
+# Specs
 
 Build plans for small Windows apps you can build today with BAWA. Each spec
 is one app. Give it to your agent and it builds the app for you.
