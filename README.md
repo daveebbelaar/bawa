@@ -111,7 +111,7 @@ Every app BAWA makes can check itself. It has a self-test that runs its real fun
 
 ## Why this stack
 
-C# and WinUI 3 is what Microsoft recommends for new Windows apps in 2026, and the unpackaged, self-contained setup BAWA uses is the one PowerToys requires for its WinUI modules. [docs/STACK.md](docs/STACK.md) compares it with WPF, Avalonia, Uno, MAUI, Tauri, Electron, and the rest, with sources and measured startup times.
+C# and WinUI 3 is what Microsoft recommends for new Windows apps in 2026, and the unpackaged, self-contained setup BAWA uses is the one PowerToys requires for its WinUI modules.
 
 Microsoft also ships a WinUI plugin for Claude Code (`winui@win-dev-skills`) and the `winapp` CLI. They focus on setup, packaged MSIX apps, and Developer Mode. BAWA is the whole pipeline (clone, stories, design, the self-test and snapshot loop, distribution) for unpackaged apps. You can install both.
 
